@@ -68,11 +68,16 @@ export default class GitHubSyncPlugin extends Plugin {
     this.scheduler.onComplete((id, result) => {
       this.recordHistoryFromResult(id, result);
       this.refreshStatusBarPending();
-      // If the pull brought new .github-sync.json contents, refresh the
-      // in-memory settings without overwriting local secrets/state.
-      if (id === VAULT_REPO_ID && result.ok === true) {
-        this.reloadRepoConfigOnly().catch(() => {});
-      }
+    });
+
+    // Run between vault and submodule syncs in every cycle:
+    //   1. Reload .github-sync.json (the vault pull may have updated it).
+    //   2. Clone any newly-declared submodules before we try to sync them —
+    //      otherwise a teammate's new submodule wouldn't get pulled until
+    //      the next plugin reload.
+    this.scheduler.setBetweenVaultAndSubsHook(async () => {
+      await this.reloadRepoConfigOnly();
+      await this.autoInitSubmodules();
     });
 
     this.scheduler.setAutoResolver((repoId, conflicts) => this.attemptAutoResolve(repoId, conflicts));
@@ -252,6 +257,10 @@ export default class GitHubSyncPlugin extends Plugin {
       this.dashboard?.onProgress(id, progress);
     });
     this.scheduler.onComplete((id, result) => this.recordHistoryFromResult(id, result));
+    this.scheduler.setBetweenVaultAndSubsHook(async () => {
+      await this.reloadRepoConfigOnly();
+      await this.autoInitSubmodules();
+    });
     this.scheduler.setAutoResolver((repoId, conflicts) => this.attemptAutoResolve(repoId, conflicts));
     this.scheduler.start();
     this.dashboard?.refreshRepos();

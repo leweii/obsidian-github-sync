@@ -24,6 +24,7 @@ export class SyncScheduler {
   private listeners: StatusListener[] = [];
   private completeListeners: SyncCompleteListener[] = [];
   private autoResolve: AutoResolveCallback | null = null;
+  private betweenVaultAndSubsHook: (() => Promise<void>) | null = null;
 
   constructor(
     private gitManager: GitManager,
@@ -33,6 +34,17 @@ export class SyncScheduler {
 
   setAutoResolver(cb: AutoResolveCallback | null): void {
     this.autoResolve = cb;
+  }
+
+  /**
+   * Hook fired between `runVault()` and `runSubmodules()` in every `run()`
+   * cycle. Used by main.ts to reload .github-sync.json (which the vault
+   * pull may have just updated) and clone any newly-declared submodules
+   * BEFORE we try to sync them — otherwise a teammate's new submodule
+   * never gets pulled until the next plugin reload.
+   */
+  setBetweenVaultAndSubsHook(fn: (() => Promise<void>) | null): void {
+    this.betweenVaultAndSubsHook = fn;
   }
 
   onStatus(fn: StatusListener): void {
@@ -79,6 +91,12 @@ export class SyncScheduler {
     this.running = true;
     try {
       await this.runVault();
+      // Vault pull may have brought in new submodule entries — let the
+      // plugin reload .github-sync.json and clone any missing ones before
+      // we try to sync them.
+      if (this.betweenVaultAndSubsHook) {
+        try { await this.betweenVaultAndSubsHook(); } catch { /* non-fatal */ }
+      }
       await this.runSubmodules();
     } finally {
       this.running = false;
