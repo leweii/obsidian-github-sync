@@ -132,6 +132,15 @@ export class GitManager {
         await this.pullWithAutoResolve(branch);
         return;
       }
+      // Brand-new empty GitHub repo has no branches yet — pull fails with
+      // "couldn't find remote ref <branch>". Treat as no-op; the
+      // subsequent `push --set-upstream` will create the branch.
+      if (
+        /couldn't find remote ref/i.test(msg) ||
+        msg.includes("No such ref")
+      ) {
+        return;
+      }
       const conflicts = (await this.git.status()).conflicted;
       if (conflicts.length > 0) throw new GitConflictError(conflicts);
       throw e;

@@ -651,6 +651,57 @@ describe("pull() — existing repo, unrelated histories", () => {
 });
 
 // ---------------------------------------------------------------------------
+// 8b. pull() / sync() — existing local repo, BRAND NEW empty remote
+//
+// User scenario: created an empty GitHub repo (no branches), pointed the
+// plugin at it. Earlier, pull() would throw `couldn't find remote ref main`
+// and bubble up as "Connection failed". The push that would have created
+// the branch never ran.
+// ---------------------------------------------------------------------------
+
+describe("pull() / sync() — existing local repo against empty remote", () => {
+  let vault: string;
+  let remote: string;
+
+  beforeEach(() => {
+    // Empty bare remote — no branches, no commits.
+    remote = tmp();
+    git(remote, "git init --bare");
+
+    // Local vault is already a git repo with content + a commit on main.
+    vault = tmp();
+    git(vault, "git init && git checkout -b main");
+    git(vault, 'git config user.name "T" && git config user.email "t@t.com"');
+    write(vault, "note.md", "hello");
+    git(vault, `git add . && git commit -m "init" && git remote add origin ${remote}`);
+  });
+
+  afterEach(() => {
+    rm(vault);
+    rm(remote);
+  });
+
+  it("pull() does NOT throw on an empty remote", async () => {
+    const gm = makeGM(vault);
+    await expect(gm.pull("main")).resolves.not.toThrow();
+  });
+
+  it("sync() succeeds against an empty remote — push creates origin/main", async () => {
+    const gm = makeGM(vault);
+    await expect(gm.sync({ branch: "main" })).resolves.not.toThrow();
+    const remoteBranches = git(remote, "git branch --list");
+    expect(remoteBranches).toMatch(/main/);
+  });
+
+  it("sync() pushes the local commit to the new remote branch", async () => {
+    const gm = makeGM(vault);
+    await gm.sync({ branch: "main" });
+    const tree = git(remote, "git ls-tree -r --name-only main");
+    expect(tree).toContain("note.md");
+  });
+});
+
+// ---------------------------------------------------------------------------
 // 9. commitMergedAndPush() — after ConflictModal-style resolution
 //
 // Simulates the exact flow the user triggers when clicking "Take Local"
