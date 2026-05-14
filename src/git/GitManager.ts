@@ -1,0 +1,420 @@
+import simpleGit, { SimpleGit } from "simple-git";
+import * as fs from "fs";
+import * as path from "path";
+import type { PendingChanges, SyncProgress } from "../types";
+
+export type ProgressFn = (p: SyncProgress) => void;
+
+export interface SyncOptions {
+  branch?: string;
+  message?: string;
+  ignorePatterns?: string[];
+  onProgress?: ProgressFn;
+}
+
+export class GitConflictError extends Error {
+  constructor(public conflicts: string[]) {
+    super(`Merge conflict in ${conflicts.length} file(s)`);
+    this.name = "GitConflictError";
+  }
+}
+
+export class GitManager {
+  private git: SimpleGit;
+  private vaultPath: string;
+
+  private user: string;
+  private email: string;
+  private token: string;
+
+  constructor(vaultPath: string, user: string, email: string, token: string) {
+    this.vaultPath = vaultPath;
+    this.user = user;
+    this.email = email;
+    this.token = token;
+    this.git = simpleGit(vaultPath);
+    this.configureGit().catch(() => {});
+  }
+
+  private async configureGit() {
+    if (this.user) await this.git.addConfig("user.name", this.user).catch(() => {});
+    if (this.email) await this.git.addConfig("user.email", this.email).catch(() => {});
+    if (this.token) {
+      await this.git.addConfig(
+        "url.https://oauth2:" + this.token + "@github.com/.insteadOf",
+        "https://github.com/"
+      ).catch(() => {});
+    }
+  }
+
+  async isRepo(): Promise<boolean> {
+    return this.git.checkIsRepo();
+  }
+
+  async listChanges(ignore: string[] = []): Promise<PendingChanges> {
+    const status = await this.git.status();
+    const keep = (p: string) => !ignore.some((pat) => matchPattern(p, pat));
+    const added = [...status.not_added, ...status.created].filter(keep);
+    const modified = status.modified.filter(keep);
+    const deleted = status.deleted.filter(keep);
+    const conflicted = status.conflicted.filter(keep);
+    return {
+      added,
+      modified,
+      deleted,
+      conflicted,
+      total: added.length + modified.length + deleted.length + conflicted.length,
+    };
+  }
+
+  /**
+   * Revert a set of files to their last committed state.
+   * - tracked (modified/deleted): git restore
+   * - untracked (added/new): delete from disk
+   */
+  async revertFiles(tracked: string[], untracked: string[]): Promise<void> {
+    if (tracked.length > 0) {
+      await this.git.raw(["restore", "--", ...tracked]);
+    }
+    for (const f of untracked) {
+      const abs = `${this.vaultPath}/${f}`;
+      fs.rmSync(abs, { force: true });
+    }
+  }
+
+  /** True when MERGE_HEAD exists — works for both normal repos and git submodules.
+   *  Submodules use a gitfile (.git is a file, not a dir) pointing to the parent
+   *  repo's .git/modules/<name>/ directory, so we resolve that indirection first. */
+  private isMidMerge(): boolean {
+    try {
+      const gitFileOrDir = `${this.vaultPath}/.git`;
+      let gitDir: string;
+      const stat = fs.statSync(gitFileOrDir);
+      if (stat.isDirectory()) {
+        gitDir = gitFileOrDir;
+      } else {
+        // gitfile format: "gitdir: <relative-path>"
+        const ref = fs.readFileSync(gitFileOrDir, "utf8").trim().replace(/^gitdir:\s*/, "");
+        gitDir = path.resolve(this.vaultPath, ref);
+      }
+      fs.accessSync(path.join(gitDir, "MERGE_HEAD"));
+      return true;
+    } catch {
+      return false;
+    }
+  }
+
+  async listConflicts(): Promise<string[]> {
+    const status = await this.git.status();
+    return status.conflicted;
+  }
+
+  async resolveConflict(file: string, strategy: "ours" | "theirs"): Promise<void> {
+    await this.git.raw(["checkout", `--${strategy}`, "--", file]);
+    await this.git.add(file);
+  }
+
+  async stagePath(file: string): Promise<void> {
+    await this.git.add(file);
+  }
+
+  async abortMerge(): Promise<void> {
+    await this.git.raw(["merge", "--abort"]).catch(() => {});
+  }
+
+  async pull(branch = "main", onProgress?: ProgressFn): Promise<void> {
+    onProgress?.({ phase: "pulling", message: `Pulling origin/${branch}` });
+    try {
+      await this.git.pull("origin", branch, { "--rebase": "false" });
+    } catch (e) {
+      const msg = (e as Error).message ?? "";
+      if (msg.includes("refusing to merge unrelated histories")) {
+        await this.pullWithAutoResolve(branch);
+        return;
+      }
+      const conflicts = (await this.git.status()).conflicted;
+      if (conflicts.length > 0) throw new GitConflictError(conflicts);
+      throw e;
+    }
+  }
+
+  /**
+   * Pull with --allow-unrelated-histories, then auto-resolve system file
+   * conflicts and commit the merge. Throws GitConflictError only when user
+   * content files genuinely conflict.
+   */
+  private async pullWithAutoResolve(branch: string): Promise<void> {
+    try {
+      await this.git.pull("origin", branch, { "--rebase": "false", "--allow-unrelated-histories": null });
+    } catch (e) {
+      const msg = (e as Error).message ?? "";
+      if (!msg.includes("Automatic merge failed") && !msg.includes("CONFLICT")) throw e;
+      // "Automatic merge failed" → conflicts on disk, handled below
+    }
+
+    // Auto-resolve system files and clean up file/directory residuals.
+    const conflicts = (await this.git.status()).conflicted;
+    const userConflicts = await this.autoResolveSystemFiles(conflicts);
+    if (userConflicts.length > 0) throw new GitConflictError(userConflicts);
+
+    // If MERGE_HEAD still exists (auto-resolved staged files not yet committed),
+    // finalise the merge commit now so the repo is in a clean state.
+    if (this.isMidMerge()) {
+      await this.git.commit("chore: merge with remote");
+    }
+  }
+
+  /** Stage and commit local changes. Returns number of changed files, or 0 if nothing to commit. */
+  async stageAndCommit(
+    message?: string,
+    ignore: string[] = [],
+    onProgress?: ProgressFn
+  ): Promise<number> {
+    const changes = await this.listChanges(ignore);
+    if (changes.total === 0) return 0;
+
+    onProgress?.({ phase: "committing", message: `Staging ${changes.total} file(s)` });
+    const toAdd = [...changes.added, ...changes.modified];
+    const toRemove = changes.deleted;
+
+    if (toAdd.length > 0) await this.git.add(toAdd);
+    for (const f of toRemove) {
+      await this.git.raw(["rm", "--cached", "--ignore-unmatch", f]).catch(() => {});
+      await this.git.raw(["rm", "--ignore-unmatch", f]).catch(() => {});
+    }
+
+    try {
+      await this.git.commit(message ?? `sync: ${new Date().toISOString()}`);
+    } catch (commitErr) {
+      const commitMsg = (commitErr as Error).message ?? "";
+      if (commitMsg.includes("unmerged") || commitMsg.includes("not possible")) {
+        const conflicted = await this.listConflicts();
+        throw new GitConflictError(conflicted.length > 0 ? conflicted : changes.conflicted);
+      }
+      throw commitErr;
+    }
+    return changes.total;
+  }
+
+  async commitAndPush(
+    branch = "main",
+    message?: string,
+    ignore: string[] = [],
+    onProgress?: ProgressFn
+  ): Promise<number> {
+    const committed = await this.stageAndCommit(message, ignore, onProgress);
+    if (committed === 0) return 0;
+    onProgress?.({ phase: "pushing", message: `Pushing to origin/${branch}` });
+    await this.git.raw(["push", "--set-upstream", "origin", branch]);
+    return committed;
+  }
+
+  /** Commit whatever is already staged (from conflict resolution) and push. */
+  async commitMergedAndPush(
+    branch = "main",
+    message: string,
+    onProgress?: ProgressFn
+  ): Promise<number> {
+    const status = await this.git.status();
+    const stagedCount = status.staged.length;
+    onProgress?.({ phase: "committing", message: "Committing merge" });
+    await this.git.commit(message);
+    onProgress?.({ phase: "pushing", message: `Pushing to origin/${branch}` });
+    await this.git.raw(["push", "--set-upstream", "origin", branch]);
+    return stagedCount;
+  }
+
+  /**
+   * Auto-resolve conflicts in system/config files that should never need
+   * user intervention. Returns the remaining conflicts that need manual review.
+   *
+   * - .github-sync.json  → theirs (remote is authoritative for shared config)
+   * - .DS_Store / Thumbs.db → ours (OS noise; drop the remote version)
+   * - .obsidian/plugins/** → ours (local plugin installs; drop remote version)
+   *
+   * Also cleans up git's file/directory conflict residue: when git can't merge
+   * a directory and a file at the same path, it renames one side to
+   * "<name>~<hash>". These paths never appear in status.conflicted but block
+   * the merge commit and cause Obsidian errors.
+   */
+  async autoResolveSystemFiles(conflicts: string[]): Promise<string[]> {
+    const takeTheirs = [".github-sync.json"];
+    const isSystemPath = (f: string) =>
+      f === ".DS_Store" ||
+      f === "Thumbs.db" ||
+      f.startsWith(".obsidian/plugins/") ||
+      f.startsWith(".obsidian/themes/");
+
+    const remaining: string[] = [];
+    for (const file of conflicts) {
+      if (takeTheirs.includes(file)) {
+        await this.resolveConflict(file, "theirs").catch(() => {});
+      } else if (isSystemPath(file)) {
+        await this.resolveConflict(file, "ours").catch(() => {});
+      } else {
+        remaining.push(file);
+      }
+    }
+
+    // Clean up file/directory conflict residue left by git (paths ending in
+    // ~<40-char-hex>). These are never in status.conflicted but block the
+    // merge commit. Remove and un-stage them so git can proceed.
+    await this.purgeGitResidualPaths();
+
+    return remaining;
+  }
+
+  private async purgeGitResidualPaths(): Promise<void> {
+    const residualRe = /~[0-9a-f]{40}$/;
+    const toRemove: string[] = [];
+
+    const scan = (dir: string) => {
+      let entries: fs.Dirent[];
+      try { entries = fs.readdirSync(dir, { withFileTypes: true }); } catch { return; }
+      for (const entry of entries) {
+        const full = `${dir}/${entry.name}`;
+        if (residualRe.test(entry.name)) {
+          toRemove.push(full);
+        } else if (entry.isDirectory()) {
+          scan(full);
+        }
+      }
+    };
+    scan(this.vaultPath);
+
+    for (const full of toRemove) {
+      fs.rmSync(full, { recursive: true, force: true });
+      const rel = full.slice(this.vaultPath.length + 1);
+      await this.git.raw(["rm", "-r", "--cached", "--ignore-unmatch", "--force", rel]).catch(() => {});
+    }
+  }
+
+  async initRepo(remoteUrl: string, branch: string): Promise<void> {
+    await this.git.init();
+    await this.configureGit();
+    await this.git.raw(["checkout", "-b", branch]).catch(() => {});
+    await this.git.addRemote("origin", remoteUrl).catch(() => {});
+    // Write a .gitignore so git itself never tracks OS noise or local plugin
+    // installations — ignorePatterns alone only filters the commit stage.
+    const gitignorePath = `${this.vaultPath}/.gitignore`;
+    if (!fs.existsSync(gitignorePath)) {
+      fs.writeFileSync(
+        gitignorePath,
+        [
+          ".DS_Store",
+          "Thumbs.db",
+          ".obsidian/workspace.json",
+          ".obsidian/workspace-mobile.json",
+          ".obsidian/plugins/",
+          ".obsidian/themes/",
+          ".trash/",
+        ].join("\n") + "\n"
+      );
+    }
+  }
+
+  async sync(opts: SyncOptions & { remoteUrl?: string } = {}): Promise<number> {
+    const branch = opts.branch ?? "main";
+    opts.onProgress?.({ phase: "checking", message: "Checking status" });
+
+    // Auto-init if this vault isn't a git repo yet.
+    if (!(await this.isRepo())) {
+      if (!opts.remoteUrl) throw new Error("Vault is not a git repository. Add a remote URL in Settings.");
+      opts.onProgress?.({ phase: "pulling", message: "Initialising repository…" });
+      await this.initRepo(opts.remoteUrl, branch);
+
+      // Step 1 — commit any existing local files so they are always preserved
+      // in git history before the remote merge.
+      const localChanges = await this.listChanges(opts.ignorePatterns ?? []);
+      if (localChanges.total > 0) {
+        opts.onProgress?.({ phase: "committing", message: `Committing ${localChanges.total} existing file(s)…` });
+        const toAdd = [...localChanges.added, ...localChanges.modified];
+        if (toAdd.length > 0) await this.git.add(toAdd);
+        await this.git.commit("chore: initial vault commit");
+      }
+
+      // Step 2 — pull from remote.
+      // • Allow unrelated histories (remote may have been init'd with a README).
+      // • "Automatic merge failed" means conflicts — handle them below.
+      // • Any other error (no remote ref, etc.) means remote is empty — skip.
+      let remoteHasCommits = false;
+      try {
+        await this.git.pull("origin", branch, { "--rebase": "false", "--allow-unrelated-histories": null });
+        remoteHasCommits = true;
+      } catch (e) {
+        const msg = (e as Error).message ?? "";
+        if (msg.includes("Automatic merge failed") || msg.includes("CONFLICT")) {
+          remoteHasCommits = true; // pull left conflict state on disk
+        }
+        // else: remote is empty or unreachable — push below creates the branch
+      }
+
+      if (remoteHasCommits) {
+        // Resolve any conflicts left by the pull.
+        const conflicts = (await this.git.status()).conflicted;
+        const userConflicts = await this.autoResolveSystemFiles(conflicts);
+        if (userConflicts.length > 0) throw new GitConflictError(userConflicts);
+        // If MERGE_HEAD still exists (all conflicts auto-resolved but not yet
+        // committed), finalise the merge commit now.
+        if (this.isMidMerge()) {
+          await this.git.commit("chore: merge with remote");
+        }
+      }
+
+      // Step 3 — push everything (initial commit + any merge commit).
+      opts.onProgress?.({ phase: "pushing", message: `Pushing to origin/${branch}` });
+      await this.git.raw(["push", "--set-upstream", "origin", branch]);
+      return localChanges?.total ?? 0;
+    }
+
+    const ignore = opts.ignorePatterns ?? [];
+
+    // If ConflictModal resolved a merge (files written + staged) but deferred
+    // the commit ("next sync will commit and push"), finalise it now.
+    // Must check isMidMerge() BEFORE listConflicts() — staged resolved files
+    // are not conflicts, and we should commit them rather than surface them.
+    if (this.isMidMerge()) {
+      const stillConflicted = (await this.git.status()).conflicted;
+      if (stillConflicted.length > 0) throw new GitConflictError(stillConflicted);
+      opts.onProgress?.({ phase: "committing", message: "Committing resolved merge…" });
+      await this.git.commit("chore: commit resolved merge");
+    }
+
+    // Surface any genuine pre-existing conflict (no mid-merge state remains now).
+    const existingConflicts = await this.listConflicts();
+    if (existingConflicts.length > 0) {
+      throw new GitConflictError(existingConflicts);
+    }
+
+    // Commit local changes BEFORE pulling so git never has to overwrite
+    // uncommitted work during the merge.
+    await this.stageAndCommit(opts.message, ignore, opts.onProgress);
+
+    // Pull remote changes (handles unrelated histories + auto-resolves system files).
+    await this.pull(branch, opts.onProgress);
+
+    // Commit any auto-resolved merge files, then push everything.
+    await this.stageAndCommit(opts.message, ignore, opts.onProgress);
+    opts.onProgress?.({ phase: "pushing", message: `Pushing to origin/${branch}` });
+    await this.git.raw(["push", "--set-upstream", "origin", branch]);
+    return 1;
+  }
+}
+
+// Minimal glob-ish match: supports * and trailing /** style patterns.
+// Good enough for ignore lists like ".obsidian/workspace.json" or "*.tmp".
+function matchPattern(path: string, pattern: string): boolean {
+  if (!pattern) return false;
+  if (pattern === path) return true;
+  // escape regex special chars except * and /
+  const re = new RegExp(
+    "^" +
+      pattern
+        .replace(/[.+^${}()|[\]\\]/g, "\\$&")
+        .replace(/\*\*/g, "::DOUBLESTAR::")
+        .replace(/\*/g, "[^/]*")
+        .replace(/::DOUBLESTAR::/g, ".*") +
+      "$"
+  );
+  return re.test(path);
+}

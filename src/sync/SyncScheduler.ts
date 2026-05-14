@@ -1,0 +1,169 @@
+import type { GitManager } from "../git/GitManager";
+import { GitConflictError } from "../git/GitManager";
+import type { SubmoduleManager } from "../git/SubmoduleManager";
+import type { GitHubSyncSettings } from "../settings";
+import type { SyncProgress } from "../types";
+import { VAULT_REPO_ID } from "../types";
+
+export type StatusListener = (id: string, progress: SyncProgress) => void;
+export type SyncCompleteListener = (
+  id: string,
+  result: { ok: true; count: number } | { ok: false; error: Error }
+) => void;
+export type AutoResolveResult =
+  | { ok: true; count: number }
+  | { ok: false };
+export type AutoResolveCallback = (
+  repoId: string,
+  conflicts: string[]
+) => Promise<AutoResolveResult>;
+
+export class SyncScheduler {
+  private timer: ReturnType<typeof setInterval> | null = null;
+  private running = false;
+  private listeners: StatusListener[] = [];
+  private completeListeners: SyncCompleteListener[] = [];
+  private autoResolve: AutoResolveCallback | null = null;
+
+  constructor(
+    private gitManager: GitManager,
+    private submoduleManager: SubmoduleManager,
+    private getSettings: () => GitHubSyncSettings
+  ) {}
+
+  setAutoResolver(cb: AutoResolveCallback | null): void {
+    this.autoResolve = cb;
+  }
+
+  onStatus(fn: StatusListener): void {
+    this.listeners.push(fn);
+  }
+
+  onComplete(fn: SyncCompleteListener): void {
+    this.completeListeners.push(fn);
+  }
+
+  private emit(id: string, progress: SyncProgress): void {
+    for (const fn of this.listeners) fn(id, progress);
+  }
+
+  private emitComplete(
+    id: string,
+    result: { ok: true; count: number } | { ok: false; error: Error }
+  ): void {
+    for (const fn of this.completeListeners) fn(id, result);
+  }
+
+  start(): void {
+    this.stop();
+    const interval = this.getSettings().autoSyncInterval;
+    if (interval <= 0) return;
+    this.timer = setInterval(() => {
+      if (!this.running) this.run().catch(() => {});
+    }, interval * 60 * 1000);
+  }
+
+  stop(): void {
+    if (this.timer) {
+      clearInterval(this.timer);
+      this.timer = null;
+    }
+  }
+
+  get isRunning(): boolean {
+    return this.running;
+  }
+
+  async run(): Promise<void> {
+    if (this.running) return;
+    this.running = true;
+    try {
+      await this.runVault();
+      await this.runSubmodules();
+    } finally {
+      this.running = false;
+    }
+  }
+
+  async runVault(message?: string): Promise<void> {
+    const settings = this.getSettings();
+    if (!settings.mainRepoUrl) return;
+    const branch = settings.mainRepoBranch || "main";
+
+    this.emit(VAULT_REPO_ID, { phase: "checking" });
+    try {
+      const count = await this.gitManager.sync({
+        branch,
+        message,
+        remoteUrl: settings.mainRepoUrl,
+        ignorePatterns: settings.ignorePatterns,
+        onProgress: (p) => this.emit(VAULT_REPO_ID, p),
+      });
+      this.emit(VAULT_REPO_ID, { phase: "synced" });
+      this.emitComplete(VAULT_REPO_ID, { ok: true, count });
+    } catch (e) {
+      if (e instanceof GitConflictError && this.autoResolve) {
+        try {
+          const r = await this.autoResolve(VAULT_REPO_ID, e.conflicts);
+          if (r.ok === true) {
+            this.emit(VAULT_REPO_ID, { phase: "synced" });
+            this.emitComplete(VAULT_REPO_ID, { ok: true, count: r.count });
+            return;
+          }
+        } catch {
+          // fall through to normal conflict emission below
+        }
+      }
+
+      const err = e as Error;
+      this.emit(VAULT_REPO_ID, {
+        phase: e instanceof GitConflictError ? "conflict" : "error",
+        message: err.message,
+        conflicts: e instanceof GitConflictError ? e.conflicts : undefined,
+      });
+      this.emitComplete(VAULT_REPO_ID, { ok: false, error: err });
+    }
+  }
+
+  async runSubmodule(id: string, message?: string): Promise<void> {
+    const sub = this.getSettings().submodules.find((s) => s.id === id);
+    if (!sub) return;
+    this.emit(id, { phase: "checking" });
+    try {
+      const count = await this.submoduleManager.syncOne(sub, (p) => this.emit(id, p));
+      this.emit(id, { phase: "synced" });
+      this.emitComplete(id, { ok: true, count });
+    } catch (e) {
+      if (e instanceof GitConflictError && this.autoResolve) {
+        try {
+          const r = await this.autoResolve(id, e.conflicts);
+          if (r.ok === true) {
+            this.emit(id, { phase: "synced" });
+            this.emitComplete(id, { ok: true, count: r.count });
+            return;
+          }
+        } catch {
+          // fall through
+        }
+      }
+
+      const err = e as Error;
+      this.emit(id, {
+        phase: e instanceof GitConflictError ? "conflict" : "error",
+        message: err.message,
+        conflicts: e instanceof GitConflictError ? e.conflicts : undefined,
+      });
+      this.emitComplete(id, { ok: false, error: err });
+    }
+  }
+
+  async runSubmodules(): Promise<void> {
+    // Route each submodule through runSubmodule so silent auto-resolve
+    // applies. (Previously this used submoduleManager.syncAll directly,
+    // which skipped the auto-resolve hook.)
+    const settings = this.getSettings();
+    for (const sub of settings.submodules) {
+      if (sub.autoSync) await this.runSubmodule(sub.id);
+    }
+  }
+}
