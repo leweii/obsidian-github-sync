@@ -29,6 +29,7 @@ export interface AISettings {
 export interface GitHubSyncSettings {
   setupComplete: boolean;
   language: Lang;
+  syncOnStartup: boolean;
   autoSyncInterval: number;
   gitUser: string;
   gitEmail: string;
@@ -46,6 +47,7 @@ export interface GitHubSyncSettings {
 export const DEFAULT_SETTINGS: GitHubSyncSettings = {
   setupComplete: false,
   language: "en",
+  syncOnStartup: true,
   autoSyncInterval: 30,
   gitUser: "",
   gitEmail: "",
@@ -360,6 +362,16 @@ export class GitHubSyncSettingTab extends PluginSettingTab {
             await this.plugin.saveSettings();
             this.display();
           })
+      );
+
+    new Setting(parent)
+      .setName(t.syncOnStartupLabel)
+      .setDesc(t.syncOnStartupDesc)
+      .addToggle((tg) =>
+        tg.setValue(this.plugin.settings.syncOnStartup ?? true).onChange(async (v) => {
+          this.plugin.settings.syncOnStartup = v;
+          await this.plugin.saveSettings();
+        })
       );
 
     new Setting(parent)

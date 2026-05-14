@@ -46,6 +46,9 @@ const en = {
     languageEn:          "English",
     languageZh:          "中文",
 
+    syncOnStartupLabel:  "Sync on startup",
+    syncOnStartupDesc:   "Run one full sync when Obsidian opens, so you see the latest remote state instead of waiting for the auto-sync timer.",
+
     sectionGitHub:       "GitHub",
     sectionGitHubDesc:   "Personal Access Token with 'repo' scope.",
     tokenLabel:          "Personal access token",
@@ -289,6 +292,9 @@ const zh: typeof en = {
     languageDesc:        "插件显示语言。重新打开设置页面后生效。",
     languageEn:          "English",
     languageZh:          "中文",
+
+    syncOnStartupLabel:  "启动时同步",
+    syncOnStartupDesc:   "打开 Obsidian 时立即执行一次完整同步，让你直接看到远端最新状态，不必等自动同步定时器。",
 
     sectionGitHub:       "GitHub",
     sectionGitHubDesc:   "需要 'repo' 权限的个人访问令牌。",

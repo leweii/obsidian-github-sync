@@ -1681,41 +1681,61 @@
   margin: 16px 0 0;
 }
 
-/* ─── Settings tab redesign ──────────────────────────────────── */
+/* ─── Settings tab redesign — minimal, clean ─────────────────── */
 
+/* Strip Obsidian 1.12 default card chrome from setting rows */
 .ghs-settings .setting-item {
-  padding: 14px 0;
-  border-top: 1px solid var(--background-modifier-border);
+  background: transparent !important;
+  border: none !important;
+  border-radius: 0 !important;
+  border-top: 1px solid var(--background-modifier-border) !important;
+  padding: 14px 2px !important;
+  margin: 0 !important;
+  box-shadow: none !important;
 }
 
-.ghs-settings .setting-item-heading {
-  border-top: none;
+.ghs-settings .setting-item-info {
+  padding-left: 0;
+  padding-right: 16px;
 }
 
-/* Section header — clearly separates groups */
+.ghs-settings .setting-item-name {
+  font-size: 0.98em;
+  font-weight: 500;
+  color: var(--text-normal);
+}
+
+.ghs-settings .setting-item-description {
+  font-size: 0.82em;
+  color: var(--text-muted);
+}
+
+.ghs-settings .setting-item-control {
+  padding-right: 0;
+}
+
+/* Section header — title + scope tag, left-aligned with rows */
 .ghs-section-header {
-  margin: 36px 0 6px;
-  padding-bottom: 8px;
+  margin: 34px 0 0;
+  padding: 0;
 }
 .ghs-section-header:first-of-type,
 .ghs-silent-hero + .ghs-section-header {
-  margin-top: 8px;
+  margin-top: 4px;
 }
 .ghs-section-header h3 {
   margin: 0;
-  font-size: 1.15em;
+  padding: 0;
+  font-size: 0.78em;
   font-weight: 600;
-  color: var(--text-normal);
-}
-.ghs-section-header .ghs-section-desc {
-  margin: 4px 0 0;
-  font-size: 0.85em;
   color: var(--text-muted);
-  line-height: 1.5;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  border: none;
 }
-/* First setting-item after a section header doesn't need a top border */
+/* First row after a section header — no top divider (header already separates) */
 .ghs-section-header + .setting-item {
-  border-top: none;
+  border-top: none !important;
 }
 
 /* Quick start hero */
@@ -1856,18 +1876,12 @@
   align-self: flex-end;
 }
 
-/* Read-only repo rows — quieter than editable ones */
-.ghs-readonly-setting {
-  opacity: 0.92;
-}
-.ghs-readonly-setting .setting-item-name {
-  font-family: var(--font-monospace, monospace);
-  font-size: 0.92em;
-}
+/* Read-only repo rows — the URL/branch in desc gets a code-like look */
 .ghs-readonly-setting .setting-item-description {
   font-family: var(--font-monospace, monospace);
-  font-size: 0.8em;
+  font-size: 0.78em;
   word-break: break-all;
+  color: var(--text-faint);
 }
 
 /* ─── Smart-sync hero (signature feature, top of settings) ───── */
@@ -2035,34 +2049,32 @@
 }
 .ghs-ai-setup-skip:hover { color: var(--text-normal); }
 
-/* Scope badge — inline on section title row */
+/* Scope badge — inline on section title row, minimal */
 .ghs-section-title-row {
   display: flex;
   align-items: center;
-  gap: 10px;
+  gap: 8px;
+  padding: 0 0 8px;
+  border-bottom: 1px solid var(--background-modifier-border);
 }
 .ghs-section-title-row h3 { margin: 0; }
 .ghs-scope-tag {
-  font-size: 0.7em;
-  padding: 2px 7px;
-  border-radius: 10px;
-  font-weight: 600;
-  letter-spacing: 0.02em;
+  font-size: 1em;
+  padding: 0;
+  font-weight: 400;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
   white-space: nowrap;
+  color: var(--text-faint);
 }
-.ghs-scope-tag.repo {
-  background: rgba(124, 77, 255, 0.15);
-  color: var(--color-accent);
+.ghs-scope-tag::before {
+  content: "·";
+  margin-right: 8px;
+  color: var(--text-faint);
 }
-.ghs-scope-tag.local {
-  background: var(--background-modifier-border);
-  color: var(--text-muted);
-}
-.ghs-scope-tag.mixed {
-  background: rgba(124, 77, 255, 0.08);
-  color: var(--text-muted);
-  border: 1px dashed rgba(124, 77, 255, 0.35);
-}
+.ghs-scope-tag.repo { color: var(--color-accent); }
+.ghs-scope-tag.local { color: var(--text-faint); }
+.ghs-scope-tag.mixed { color: var(--text-muted); }
 
 /* ── Local Changes Modal ─────────────────────────────────────── */
 

@@ -8,7 +8,7 @@
     "build": "tsc -noEmit -skipLibCheck && node esbuild.config.mjs production",
     "test": "vitest run",
     "test:watch": "vitest",
-    "deploy": "npm run build && cp main.js styles.css manifest.json \"/Users/jakob/Library/Mobile Documents/iCloud~md~obsidian/Documents/myknowledge/.obsidian/plugins/obsidian-github-sync/\"",
+    "deploy": "npm run build && cp main.js styles.css manifest.json \"/Users/jakob/Library/Mobile Documents/iCloud~md~obsidian/Documents/myknowledge/.obsidian/plugins/obsidian-github-sync/\" && cp main.js styles.css manifest.json \"/Users/jakob/Desktop/untitled folder/test/.obsidian/plugins/obsidian-github-sync/\"",
     "version": "node version-bump.mjs && git add manifest.json versions.json"
   },
   "keywords": [],

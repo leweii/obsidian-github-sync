@@ -135,9 +135,18 @@ export default class GitHubSyncPlugin extends Plugin {
       });
     }
 
-    // Auto-initialize submodules declared in .github-sync.json but not yet
-    // cloned on this machine (fresh clone without --recursive).
-    this.app.workspace.onLayoutReady(() => this.autoInitSubmodules().catch(() => {}));
+    // On startup:
+    //   1. Auto-init submodules declared in .github-sync.json but not yet
+    //      cloned (fresh clone without --recursive).
+    //   2. Immediately run one full sync so the user sees the latest remote
+    //      state on entering Obsidian — instead of waiting up to autoSyncInterval
+    //      minutes for the scheduler timer to fire.
+    this.app.workspace.onLayoutReady(async () => {
+      try {
+        await this.autoInitSubmodules();
+        await this.syncOnStartupIfEnabled();
+      } catch { /* surfaced via per-phase notices */ }
+    });
   }
 
   private async autoInitSubmodules(): Promise<void> {
@@ -151,6 +160,21 @@ export default class GitHubSyncPlugin extends Plugin {
       new Notice(`Initialized ${newly.length} submodule(s): ${newly.join(", ")}`);
       this.dashboard?.refreshRepos();
     }
+  }
+
+  /**
+   * Run one full sync (main vault + every autoSync submodule) right after
+   * the plugin loads, so opening Obsidian pulls the latest remote state
+   * instead of waiting up to autoSyncInterval minutes for the timer.
+   * Skipped when the user hasn't completed setup, has no remote configured,
+   * or has disabled it in Settings.
+   */
+  private async syncOnStartupIfEnabled(): Promise<void> {
+    if (!this.settings.syncOnStartup) return;
+    if (!this.settings.setupComplete) return;
+    if (!this.settings.mainRepoUrl && this.settings.submodules.length === 0) return;
+    if (this.scheduler.isRunning) return;
+    await this.scheduler.run();
   }
 
   async removeSubmodule(id: string): Promise<void> {
