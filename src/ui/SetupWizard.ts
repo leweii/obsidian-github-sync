@@ -1,7 +1,6 @@
 import { App, Modal, Notice, requestUrl, setIcon } from "obsidian";
 import type GitHubSyncPlugin from "../main";
 import { isValidGitHubUrl } from "../git/SubmoduleManager";
-import { repoConfigExists } from "../config/repoConfigIO";
 
 interface WizardState {
   githubToken: string;
@@ -13,7 +12,6 @@ interface WizardState {
 
 export class SetupWizard extends Modal {
   private step = 0;
-  private hasRepoConfig = false;
   private state: WizardState;
   private tokenStatus: "idle" | "loading" | "success" | "error" = "idle";
   private tokenUser = "";
@@ -29,21 +27,24 @@ export class SetupWizard extends Modal {
       repoUrl: plugin.settings.mainRepoUrl,
       branch: plugin.settings.mainRepoBranch || "main",
     };
+
+    // Skip past steps the user has already completed:
+    //   no creds          → start at Welcome (auto-open on first install)
+    //   creds set, no repo → start at Repo (user opened from "Connect repository")
+    //   everything set     → start at Repo so user can edit URL ("Reconfigure")
+    const hasCreds =
+      !!plugin.settings.githubToken &&
+      !!plugin.settings.gitUser &&
+      !!plugin.settings.gitEmail;
+    if (hasCreds) this.step = 2;
   }
 
   async onOpen(): Promise<void> {
-    this.hasRepoConfig = await repoConfigExists(this.app.vault.adapter, "");
     this.render();
   }
 
-  private get totalDots(): number {
-    return this.hasRepoConfig ? 3 : 4;
-  }
-
-  private get dotIndex(): number {
-    if (this.step === 3) return this.hasRepoConfig ? 2 : 3;
-    return this.step;
-  }
+  private get totalDots(): number { return 4; }
+  private get dotIndex(): number { return this.step; }
 
   private render(): void {
     const { contentEl } = this;
@@ -176,7 +177,10 @@ export class SetupWizard extends Modal {
       await this.plugin.saveSettings();
       this.plugin.reinitGit();
 
-      this.goTo(this.hasRepoConfig ? 3 : 2);
+      // Always advance to the Repo step. If the user already configured
+      // a URL, they can review/edit and click Finish; or click "Skip for
+      // now" to go straight to Done.
+      this.goTo(2);
     });
   }
 
