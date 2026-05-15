@@ -8,6 +8,7 @@ export class AddSubmoduleModal extends Modal {
   private branch = "main";
   private remoteStatus: "idle" | "loading" | "valid" | "invalid" = "idle";
   private remoteMsg = "";
+  private remoteIsEmpty = false;
   private remoteDebounce: ReturnType<typeof setTimeout> | null = null;
   private pathStatus: "idle" | "ok" | "collision" = "idle";
   private submitBtn: HTMLButtonElement | null = null;
@@ -127,20 +128,16 @@ export class AddSubmoduleModal extends Modal {
       if (res.status === 200) {
         // Repo exists, but `git submodule add` will fail with
         // "branch yet to be born" if it has no commits. GitHub returns
-        // 409 on /commits for empty repos — block the submit early with
-        // a useful hint instead of letting git produce a cryptic error.
+        // 409 on /commits for empty repos — flag it so submit() can
+        // silently auto-initialize the remote before adding.
         const commits = await requestUrl({
           url: `https://api.github.com/repos/${owner}/${repo}/commits?per_page=1`,
           headers,
           throw: false,
         });
-        if (commits.status === 409) {
-          this.remoteStatus = "invalid";
-          this.remoteMsg = "Repository is empty — push an initial commit first";
-        } else {
-          this.remoteStatus = "valid";
-          this.remoteMsg = `Found ${owner}/${repo}`;
-        }
+        this.remoteIsEmpty = commits.status === 409;
+        this.remoteStatus = "valid";
+        this.remoteMsg = `Found ${owner}/${repo}`;
       } else if (res.status === 404) {
         this.remoteStatus = "invalid";
         this.remoteMsg = "Repository not found";
@@ -212,23 +209,77 @@ export class AddSubmoduleModal extends Modal {
       this.submitBtn.textContent = "Adding…";
     }
     try {
+      if (this.remoteIsEmpty) {
+        if (this.submitBtn) this.submitBtn.textContent = "Preparing repository…";
+        await this.initializeEmptyRepo();
+      }
       await this.plugin.addSubmodule(config);
       new Notice(`Added "${this.localPath}"`);
       this.close();
     } catch (e) {
       const raw = (e as Error).message ?? "";
-      // `git submodule add` against an empty remote produces a cryptic
-      // "branch yet to be born" message — translate it. (probeRemote
-      // normally blocks this, but offline-fallback can let it through.)
-      const msg = /yet to be born|unable to checkout submodule/i.test(raw)
-        ? "Repository is empty — push an initial commit on GitHub first."
-        : raw;
-      new Notice(`Failed: ${msg}`, 8000);
+      // Belt-and-braces: probeRemote's offline fallback can let an empty
+      // repo through. If we land here with that error, try auto-init then
+      // retry the submodule add once.
+      if (
+        !this.remoteIsEmpty &&
+        /yet to be born|unable to checkout submodule/i.test(raw)
+      ) {
+        try {
+          if (this.submitBtn) this.submitBtn.textContent = "Preparing repository…";
+          await this.initializeEmptyRepo();
+          await this.plugin.addSubmodule(config);
+          new Notice(`Added "${this.localPath}"`);
+          this.close();
+          return;
+        } catch (retryErr) {
+          new Notice(`Failed: ${(retryErr as Error).message}`, 8000);
+        }
+      } else {
+        new Notice(`Failed: ${raw}`, 8000);
+      }
       if (this.submitBtn) {
         this.submitBtn.disabled = false;
         this.submitBtn.textContent = "Add";
       }
     }
+  }
+
+  /**
+   * Create an initial commit on the remote so `git submodule add` has a
+   * branch to check out. Uses the GitHub Contents API to PUT a README on
+   * the chosen branch — the user's token already has repo scope (probe
+   * verified). Invisible to the user; just makes Add "work" for repos
+   * that were created on GitHub but never initialized.
+   */
+  private async initializeEmptyRepo(): Promise<void> {
+    const token = this.plugin.settings.githubToken;
+    if (!token) throw new Error("GitHub token required to initialize repository.");
+    const match = this.remoteUrl.match(/github\.com[:/]([\w.\-]+)\/([\w.\-]+?)(\.git)?\/?$/);
+    if (!match) throw new Error("Couldn't parse repository URL.");
+    const [, owner, repo] = match;
+    const content = btoa(`# ${repo}\n`);
+    const res = await requestUrl({
+      url: `https://api.github.com/repos/${owner}/${repo}/contents/README.md`,
+      method: "PUT",
+      headers: {
+        Authorization: `token ${token}`,
+        "User-Agent": "ObsidianGitHubSync",
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        message: "Initialize repository",
+        content,
+        // Omit `branch` — for an empty repo, GitHub creates the commit on
+        // the repo's configured default branch. Passing an explicit name
+        // can fail because the branch doesn't exist yet.
+      }),
+      throw: false,
+    });
+    if (res.status !== 201 && res.status !== 200) {
+      throw new Error(`Couldn't initialize repository (HTTP ${res.status}).`);
+    }
+    this.remoteIsEmpty = false;
   }
 
   onClose(): void {
