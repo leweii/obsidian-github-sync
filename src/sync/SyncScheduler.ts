@@ -20,7 +20,7 @@ export type AutoResolveCallback = (
 ) => Promise<AutoResolveResult>;
 
 export class SyncScheduler {
-  private timer: ReturnType<typeof setInterval> | null = null;
+  private timer: number | null = null;
   private running = false;
   private listeners: StatusListener[] = [];
   private completeListeners: SyncCompleteListener[] = [];
@@ -71,14 +71,14 @@ export class SyncScheduler {
     this.stop();
     const interval = this.getSettings().autoSyncInterval;
     if (interval <= 0) return;
-    this.timer = setInterval(() => {
+    this.timer = window.setInterval(() => {
       if (!this.running) this.run().catch(() => {});
     }, interval * 60 * 1000);
   }
 
   stop(): void {
     if (this.timer) {
-      clearInterval(this.timer);
+      window.clearInterval(this.timer);
       this.timer = null;
     }
   }

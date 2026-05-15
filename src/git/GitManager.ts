@@ -25,12 +25,20 @@ export class GitManager {
   private user: string;
   private email: string;
   private token: string;
+  private configDir: string;
 
-  constructor(vaultPath: string, user: string, email: string, token: string) {
+  constructor(
+    vaultPath: string,
+    user: string,
+    email: string,
+    token: string,
+    configDir = ".obsidian"
+  ) {
     this.vaultPath = vaultPath;
     this.user = user;
     this.email = email;
     this.token = token;
+    this.configDir = configDir;
     this.git = simpleGit(vaultPath);
     this.configureGit().catch(() => {});
   }
@@ -86,10 +94,10 @@ export class GitManager {
           phase: "pushing",
           message: `Network blip, retrying push in ${waitMs / 1000}s (attempt ${i + 2}/${maxAttempts})…`,
         });
-        await new Promise((r) => setTimeout(r, waitMs));
+        await new Promise((r) => window.setTimeout(r, waitMs));
       }
     }
-    throw lastErr!;
+    throw lastErr ?? new Error("Git command failed after retries.");
   }
 
   async isRepo(): Promise<boolean> {
@@ -296,8 +304,8 @@ export class GitManager {
     const isSystemPath = (f: string) =>
       f === ".DS_Store" ||
       f === "Thumbs.db" ||
-      f.startsWith(".obsidian/plugins/") ||
-      f.startsWith(".obsidian/themes/");
+      f.startsWith(`${this.configDir}/plugins/`) ||
+      f.startsWith(`${this.configDir}/themes/`);
 
     const remaining: string[] = [];
     for (const file of conflicts) {
@@ -406,7 +414,7 @@ export class GitManager {
         [
           ".DS_Store",
           "Thumbs.db",
-          ".obsidian/",
+          `${this.configDir}/`,
           ".trash/",
         ].join("\n") + "\n"
       );

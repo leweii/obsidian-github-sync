@@ -35,7 +35,7 @@ export default class GitHubSyncPlugin extends Plugin {
   submoduleManager: SubmoduleManager;
   scheduler: SyncScheduler;
   private statusBar: StatusBar;
-  private pendingPollHandle: ReturnType<typeof setInterval> | null = null;
+  private pendingPollHandle: number | null = null;
 
   /**
    * Resolve the live dashboard view from the workspace rather than holding
@@ -77,7 +77,7 @@ export default class GitHubSyncPlugin extends Plugin {
 
     this.scheduler.onComplete((id, result) => {
       this.recordHistoryFromResult(id, result);
-      this.refreshStatusBarPending();
+      void this.refreshStatusBarPending();
     });
 
     // Run between vault and submodule syncs in every cycle:
@@ -126,7 +126,6 @@ export default class GitHubSyncPlugin extends Plugin {
     this.addCommand({
       id: "revert-local-changes",
       name: "Revert Local Changes…",
-      hotkeys: [{ modifiers: ["Mod", "Alt"], key: "z" }],
       callback: () => this.openLocalChanges(),
     });
 
@@ -135,10 +134,10 @@ export default class GitHubSyncPlugin extends Plugin {
     this.scheduler.start();
 
     // Poll pending change count every 2 minutes for the status-bar badge.
-    this.pendingPollHandle = setInterval(() => this.refreshStatusBarPending(), 120_000);
+    this.pendingPollHandle = window.setInterval(() => { void this.refreshStatusBarPending(); }, 120_000);
     this.app.workspace.onLayoutReady(() => {
-      this.refreshStatusBarPending();
-      this.checkExistingConflicts();
+      void this.refreshStatusBarPending();
+      void this.checkExistingConflicts();
     });
 
     if (!this.settings.githubToken) {
@@ -269,7 +268,6 @@ export default class GitHubSyncPlugin extends Plugin {
       }
     } catch { /* not a git repo yet */ }
 
-    const vaultPath = (this.app.vault.adapter as any).basePath as string;
     for (const sub of this.settings.submodules) {
       try {
         const conflicts = await this.submoduleManager.listConflicts(sub);
@@ -285,17 +283,20 @@ export default class GitHubSyncPlugin extends Plugin {
   }
 
   private initGit(vaultPath: string): void {
+    const configDir = this.app.vault.configDir;
     this.gitManager = new GitManager(
       vaultPath,
       this.settings.gitUser,
       this.settings.gitEmail,
-      this.settings.githubToken
+      this.settings.githubToken,
+      configDir
     );
     this.submoduleManager = new SubmoduleManager(
       vaultPath,
       this.settings.gitUser,
       this.settings.gitEmail,
-      this.settings.githubToken
+      this.settings.githubToken,
+      configDir
     );
   }
 
@@ -334,7 +335,6 @@ export default class GitHubSyncPlugin extends Plugin {
     const adapter = this.app.vault.adapter;
     const gm = this.gitManager;
     const branch = this.settings.mainRepoBranch || "main";
-    const ignore = this.settings.ignorePatterns;
     return {
       readFile: (p) => adapter.read(p),
       writeFile: (p, c) => adapter.write(p, c),
@@ -432,7 +432,7 @@ export default class GitHubSyncPlugin extends Plugin {
     } else {
       message = friendlyError((result as { ok: false; error: Error }).error.message);
     }
-    this.recordHistory({
+    void this.recordHistory({
       repoId: id,
       repoLabel: label,
       time: Date.now(),
@@ -444,7 +444,7 @@ export default class GitHubSyncPlugin extends Plugin {
 
   onunload() {
     this.scheduler.stop();
-    if (this.pendingPollHandle) clearInterval(this.pendingPollHandle);
+    if (this.pendingPollHandle) window.clearInterval(this.pendingPollHandle);
     this.statusBar?.destroy();
   }
 
@@ -461,6 +461,13 @@ export default class GitHubSyncPlugin extends Plugin {
       }
     } catch (e) {
       console.warn("[github-sync] applyRepoConfig failed:", e);
+    }
+
+    // Ensure the (possibly custom) config dir is always ignored at the
+    // commit-stage filter, mirroring the .gitignore GitManager writes.
+    const configGlob = `${this.app.vault.configDir}/**`;
+    if (!merged.ignorePatterns.includes(configGlob)) {
+      merged.ignorePatterns = [...merged.ignorePatterns, configGlob];
     }
 
     this.settings = merged;
@@ -552,13 +559,13 @@ export default class GitHubSyncPlugin extends Plugin {
   private async activateDashboard(): Promise<void> {
     const existing = this.app.workspace.getLeavesOfType(DASHBOARD_VIEW_TYPE);
     if (existing.length > 0) {
-      this.app.workspace.revealLeaf(existing[0]);
+      await this.app.workspace.revealLeaf(existing[0]);
       return;
     }
     const leaf = this.app.workspace.getRightLeaf(false);
     if (leaf) {
       await leaf.setViewState({ type: DASHBOARD_VIEW_TYPE, active: true });
-      this.app.workspace.revealLeaf(leaf);
+      await this.app.workspace.revealLeaf(leaf);
     }
   }
 }

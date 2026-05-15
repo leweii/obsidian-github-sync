@@ -6,7 +6,7 @@ import { requestUrl } from "obsidian";
  * github.com.
  */
 export function parseOwnerRepo(url: string): { owner: string; repo: string } | null {
-  const m = url.match(/github\.com[:/]([\w.\-]+)\/([\w.\-]+?)(\.git)?\/?$/);
+  const m = url.match(/github\.com[:/]([\w.-]+)\/([\w.-]+?)(\.git)?\/?$/);
   if (!m) return null;
   return { owner: m[1], repo: m[2] };
 }

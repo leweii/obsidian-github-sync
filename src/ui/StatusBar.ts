@@ -11,7 +11,7 @@ export class StatusBar {
   private lastSyncedAt: number | null = null;
   private pendingChanges = 0;
   private errorMsg: string | null = null;
-  private tickHandle: ReturnType<typeof setInterval> | null = null;
+  private tickHandle: number | null = null;
 
   constructor(statusBarEl: HTMLElement) {
     this.el = statusBarEl;
@@ -24,11 +24,11 @@ export class StatusBar {
     this.render();
 
     // Refresh "Xm ago" label every 30s.
-    this.tickHandle = setInterval(() => this.render(), 30_000);
+    this.tickHandle = window.setInterval(() => this.render(), 30_000);
   }
 
   destroy(): void {
-    if (this.tickHandle) clearInterval(this.tickHandle);
+    if (this.tickHandle) window.clearInterval(this.tickHandle);
   }
 
   setPhase(phase: SyncPhase, message?: string): void {

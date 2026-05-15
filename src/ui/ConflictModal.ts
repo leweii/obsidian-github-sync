@@ -484,7 +484,7 @@ export class ConflictModal extends Modal {
     ta.spellcheck = false;
     ta.value = this.editText;
     ta.oninput = () => { this.editText = ta.value; };
-    setTimeout(() => ta.focus(), 0);
+    window.setTimeout(() => ta.focus(), 0);
     ta.onkeydown = (e: KeyboardEvent) => {
       if ((e.metaKey || e.ctrlKey) && e.key === "Enter") {
         e.preventDefault();

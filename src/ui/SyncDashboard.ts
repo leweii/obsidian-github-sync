@@ -40,7 +40,7 @@ export class SyncDashboard extends ItemView {
   private listEl: HTMLElement | null = null;
   private historyEl: HTMLElement | null = null;
   private emptyEl: HTMLElement | null = null;
-  private tickHandle: ReturnType<typeof setInterval> | null = null;
+  private tickHandle: number | null = null;
 
   constructor(leaf: WorkspaceLeaf, private plugin: GitHubSyncPlugin) {
     super(leaf);
@@ -53,15 +53,15 @@ export class SyncDashboard extends ItemView {
   async onOpen(): Promise<void> {
     this.render();
     // Auto-refresh relative timestamps every 30s.
-    this.tickHandle = setInterval(() => this.refreshTimestamps(), 30_000);
+    this.tickHandle = window.setInterval(() => this.refreshTimestamps(), 30_000);
     // Probe pending changes once on open so card meta is accurate.
-    this.refreshPendingCounts();
+    void this.refreshPendingCounts();
     // Surface any pre-existing merge conflicts immediately on open.
-    this.plugin.checkExistingConflicts();
+    void this.plugin.checkExistingConflicts();
   }
 
   async onClose(): Promise<void> {
-    if (this.tickHandle) clearInterval(this.tickHandle);
+    if (this.tickHandle) window.clearInterval(this.tickHandle);
     this.contentEl.empty();
     this.cards.clear();
   }
@@ -87,7 +87,7 @@ export class SyncDashboard extends ItemView {
 
   refreshRepos(): void {
     this.render();
-    this.refreshPendingCounts();
+    void this.refreshPendingCounts();
   }
 
   refreshHistory(): void {
@@ -155,8 +155,8 @@ export class SyncDashboard extends ItemView {
 
     if (this.cards.size === 0) {
       this.emptyEl = this.listEl.createDiv("ghs-empty");
-      this.emptyEl.createDiv({ cls: "ghs-empty-icon" });
-      setIcon(this.emptyEl.querySelector(".ghs-empty-icon") as HTMLElement, "git-branch");
+      const emptyIcon = this.emptyEl.createDiv({ cls: "ghs-empty-icon" });
+      setIcon(emptyIcon, "git-branch");
       this.emptyEl.createEl("p", { text: "No repositories configured yet." });
       const openSettings = this.emptyEl.createEl("button", { text: "Open Settings", cls: "mod-cta" });
       openSettings.onclick = () => (this.app as any).setting?.open?.();
@@ -224,7 +224,7 @@ export class SyncDashboard extends ItemView {
     const copyBtn = errorActions.createEl("button", { text: "Copy", attr: { title: "Copy error" } });
     copyBtn.onclick = () => {
       const msg = this.cards.get(state.id)?.state.errorMsg ?? "";
-      navigator.clipboard.writeText(msg).then(() => new Notice("Error copied"));
+      void navigator.clipboard.writeText(msg).then(() => new Notice("Error copied"));
     };
     const resolveBtn = errorActions.createEl("button", { text: "Resolve", cls: "ghs-resolve-btn" });
     resolveBtn.onclick = () => this.openConflict(state.id);
@@ -279,7 +279,7 @@ export class SyncDashboard extends ItemView {
     if (hasError) {
       errorRow.addClass(state.phase);
       errorText.setText(friendlyError(state.errorMsg ?? ""));
-      const resolveBtn = errorRow.querySelector(".ghs-resolve-btn") as HTMLButtonElement;
+      const resolveBtn = errorRow.querySelector<HTMLButtonElement>(".ghs-resolve-btn");
       if (resolveBtn) resolveBtn.toggleClass("ghs-hidden", state.phase !== "conflict");
     }
   }
@@ -308,7 +308,7 @@ export class SyncDashboard extends ItemView {
         // ignore — repo may not be initialized yet
       }
     }
-    this.plugin.refreshStatusBarPending();
+    void this.plugin.refreshStatusBarPending();
   }
 
   // ── History ──────────────────────────────────────────────────
@@ -342,13 +342,13 @@ export class SyncDashboard extends ItemView {
       return;
     }
     await this.plugin.scheduler.run();
-    this.refreshPendingCounts();
+    void this.refreshPendingCounts();
   }
 
   private async syncOne(id: string): Promise<void> {
     if (id === VAULT_REPO_ID) await this.plugin.scheduler.runVault();
     else await this.plugin.scheduler.runSubmodule(id);
-    this.refreshPendingCounts();
+    void this.refreshPendingCounts();
   }
 
   private async openPreview(id: string): Promise<void> {
@@ -379,7 +379,7 @@ export class SyncDashboard extends ItemView {
         } finally {
           this.plugin.settings.ignorePatterns = oldIgnore;
         }
-        this.refreshPendingCounts();
+        void this.refreshPendingCounts();
       }).open();
     } catch (e) {
       new Notice(`Preview failed: ${(e as Error).message}`);
@@ -403,7 +403,7 @@ export class SyncDashboard extends ItemView {
         card.state.conflicts = undefined;
         card.state.errorMsg = undefined;
         this.applyCard(card);
-        this.refreshPendingCounts();
+        void this.refreshPendingCounts();
       },
       card.state.label,
       this.plugin.getAIClient()

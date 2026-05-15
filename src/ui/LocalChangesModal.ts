@@ -56,7 +56,7 @@ export class LocalChangesModal extends Modal {
 
       for (const f of files) {
         const row = group.createDiv("ghs-lc-row");
-        const cb = row.createEl("input", { attr: { type: "checkbox" } }) as HTMLInputElement;
+        const cb = row.createEl("input", { attr: { type: "checkbox" } });
         cb.checked = this.selected.has(f);
         cb.onchange = () => {
           if (cb.checked) this.selected.add(f);

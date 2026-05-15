@@ -10,7 +10,7 @@ export class AddSubmoduleModal extends Modal {
   private remoteStatus: "idle" | "loading" | "valid" | "invalid" = "idle";
   private remoteMsg = "";
   private remoteIsEmpty = false;
-  private remoteDebounce: ReturnType<typeof setTimeout> | null = null;
+  private remoteDebounce: number | null = null;
   private pathStatus: "idle" | "ok" | "collision" = "idle";
   private submitBtn: HTMLButtonElement | null = null;
 
@@ -53,7 +53,7 @@ export class AddSubmoduleModal extends Modal {
     urlBadge.addClass("ghs-hidden");
     urlInput.oninput = () => {
       this.remoteUrl = urlInput.value.trim();
-      if (this.remoteDebounce) clearTimeout(this.remoteDebounce);
+      if (this.remoteDebounce) window.clearTimeout(this.remoteDebounce);
       if (!this.remoteUrl) {
         this.remoteStatus = "idle";
         this.renderRemoteBadge(urlBadge);
@@ -69,7 +69,7 @@ export class AddSubmoduleModal extends Modal {
       }
       this.remoteStatus = "loading";
       this.renderRemoteBadge(urlBadge);
-      this.remoteDebounce = setTimeout(() => this.probeRemote(urlBadge), 500);
+      this.remoteDebounce = window.setTimeout(() => { void this.probeRemote(urlBadge); }, 500);
     };
 
     // ── Branch ─────────────────────────────────────────────────
@@ -108,7 +108,7 @@ export class AddSubmoduleModal extends Modal {
   private async probeRemote(badge: HTMLElement): Promise<void> {
     // Try GitHub API to confirm reachability. Falls back to URL-only validation if token missing.
     const token = this.plugin.settings.githubToken;
-    const match = this.remoteUrl.match(/github\.com[:/]([\w.\-]+)\/([\w.\-]+?)(\.git)?\/?$/);
+    const match = this.remoteUrl.match(/github\.com[:/]([\w.-]+)\/([\w.-]+?)(\.git)?\/?$/);
     if (!match) {
       this.remoteStatus = "invalid";
       this.remoteMsg = "Couldn't parse owner/repo";
@@ -248,7 +248,7 @@ export class AddSubmoduleModal extends Modal {
   }
 
   onClose(): void {
-    if (this.remoteDebounce) clearTimeout(this.remoteDebounce);
+    if (this.remoteDebounce) window.clearTimeout(this.remoteDebounce);
     this.contentEl.empty();
   }
 }

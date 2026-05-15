@@ -16,7 +16,7 @@ export class SetupWizard extends Modal {
   private state: WizardState;
   private tokenStatus: "idle" | "loading" | "success" | "error" = "idle";
   private tokenUser = "";
-  private tokenDebounce: ReturnType<typeof setTimeout> | null = null;
+  private tokenDebounce: number | null = null;
 
   constructor(app: App, private plugin: GitHubSyncPlugin) {
     super(app);
@@ -162,14 +162,14 @@ export class SetupWizard extends Modal {
 
     tokenInput.oninput = () => {
       this.state.githubToken = tokenInput.value.trim();
-      if (this.tokenDebounce) clearTimeout(this.tokenDebounce);
+      if (this.tokenDebounce) window.clearTimeout(this.tokenDebounce);
       if (!this.state.githubToken) {
         this.tokenStatus = "idle";
         this.renderTokenBadge(badge);
         return;
       }
-      this.tokenDebounce = setTimeout(
-        () => this.testToken(this.state.githubToken, badge, nameInput, emailInput),
+      this.tokenDebounce = window.setTimeout(
+        () => { void this.testToken(this.state.githubToken, badge, nameInput, emailInput); },
         600
       );
     };
@@ -382,7 +382,7 @@ export class SetupWizard extends Modal {
     footer.createSpan();
     this.btn(footer, "Start Syncing", true, () => {
       this.close();
-      this.plugin.scheduler.run();
+      void this.plugin.scheduler.run();
     });
   }
 
@@ -394,10 +394,10 @@ export class SetupWizard extends Modal {
     return wrapper.createEl("input", { attr: { type: "text", placeholder } });
   }
 
-  private btn(parent: HTMLElement, text: string, cta: boolean, onClick: () => void): HTMLButtonElement {
+  private btn(parent: HTMLElement, text: string, cta: boolean, onClick: () => unknown): HTMLButtonElement {
     const b = parent.createEl("button", { text });
     if (cta) b.addClass("mod-cta");
-    b.onclick = onClick;
+    b.onclick = () => { void onClick(); };
     return b;
   }
 
@@ -407,7 +407,7 @@ export class SetupWizard extends Modal {
   }
 
   onClose(): void {
-    if (this.tokenDebounce) clearTimeout(this.tokenDebounce);
+    if (this.tokenDebounce) window.clearTimeout(this.tokenDebounce);
     this.contentEl.empty();
   }
 }

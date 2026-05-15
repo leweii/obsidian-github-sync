@@ -13,7 +13,8 @@ export class SubmoduleManager {
     private vaultPath: string,
     private user: string,
     private email: string,
-    private token: string
+    private token: string,
+    private configDir = ".obsidian"
   ) {
     this.git = simpleGit(vaultPath);
   }
@@ -175,18 +176,18 @@ export class SubmoduleManager {
 
   /** Returns (creating if needed) a GitManager scoped to the submodule path. */
   private getSubGM(config: SubmoduleConfig): GitManager {
-    if (!this.gitManagers.has(config.id)) {
-      this.gitManagers.set(
-        config.id,
-        new GitManager(
-          `${this.vaultPath}/${config.localPath}`,
-          this.user,
-          this.email,
-          this.token
-        )
+    let gm = this.gitManagers.get(config.id);
+    if (!gm) {
+      gm = new GitManager(
+        `${this.vaultPath}/${config.localPath}`,
+        this.user,
+        this.email,
+        this.token,
+        this.configDir
       );
+      this.gitManagers.set(config.id, gm);
     }
-    return this.gitManagers.get(config.id)!;
+    return gm;
   }
 
   /** Stage the updated submodule pointer in the parent vault and push. */
@@ -205,7 +206,7 @@ export class SubmoduleManager {
 // Validation helpers exposed for UI use.
 export function isValidGitHubUrl(url: string): boolean {
   if (!url) return false;
-  return /^(https:\/\/github\.com\/[\w.\-]+\/[\w.\-]+(\.git)?\/?|git@github\.com:[\w.\-]+\/[\w.\-]+(\.git)?)$/.test(
+  return /^(https:\/\/github\.com\/[\w.-]+\/[\w.-]+(\.git)?\/?|git@github\.com:[\w.-]+\/[\w.-]+(\.git)?)$/.test(
     url.trim()
   );
 }

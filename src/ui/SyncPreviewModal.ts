@@ -14,7 +14,7 @@ export class SyncPreviewModal extends Modal {
     app: App,
     private repoLabel: string,
     private changes: PendingChanges,
-    private onConfirm: (result: PreviewResult) => void
+    private onConfirm: (result: PreviewResult) => unknown
   ) {
     super(app);
   }
@@ -53,7 +53,7 @@ export class SyncPreviewModal extends Modal {
     const confirm = footer.createEl("button", { text: "Sync now", cls: "mod-cta" });
     confirm.onclick = () => {
       this.close();
-      this.onConfirm({ message: this.message, excludedPaths: Array.from(this.excluded) });
+      void this.onConfirm({ message: this.message, excludedPaths: Array.from(this.excluded) });
     };
   }
 

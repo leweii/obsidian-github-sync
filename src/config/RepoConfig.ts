@@ -168,8 +168,8 @@ export function applyRepoConfig(
 }
 
 function generateSubmoduleId(path: string): string {
-  if (typeof crypto !== "undefined" && (crypto as Crypto).randomUUID) {
-    return (crypto as Crypto).randomUUID();
+  if (typeof crypto !== "undefined" && crypto.randomUUID) {
+    return crypto.randomUUID();
   }
   return `sub_${path.replace(/[^a-z0-9]/gi, "_")}_${Date.now().toString(36)}`;
 }

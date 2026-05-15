@@ -4,6 +4,7 @@ import type { SyncHistoryEntry } from "./types";
 import { L, setLang, tf, type Lang } from "./i18n";
 import { isValidGitHubUrl } from "./git/SubmoduleManager";
 import { checkRepoAccess } from "./git/githubApi";
+import { AIProviderSetupModal } from "./ui/AIProviderSetupModal";
 
 export interface SubmoduleConfig {
   id: string;
@@ -57,9 +58,10 @@ export const DEFAULT_SETTINGS: GitHubSyncSettings = {
   mainRepoUrl: "",
   mainRepoBranch: "main",
   submodules: [],
+  // The config-dir pattern is injected at load time from
+  // app.vault.configDir (it isn't necessarily ".obsidian").
   ignorePatterns: [
     ".DS_Store",
-    ".obsidian/**",
     ".trash/**",
   ],
   historyLimit: 20,
@@ -143,11 +145,10 @@ export class GitHubSyncSettingTab extends PluginSettingTab {
         // Revert visually until user finishes the setup modal
         toggleInput.checked = false;
         toggleWrap.removeClass("is-enabled");
-        const { AIProviderSetupModal } = require("./ui/AIProviderSetupModal");
         new AIProviderSetupModal(this.app, this.plugin, (saved: boolean) => {
           if (saved) {
             this.plugin.settings.ai.silentMode = true;
-            this.plugin.saveSettings().then(() => this.display());
+            void this.plugin.saveSettings().then(() => this.display());
           } else {
             this.display();
           }
