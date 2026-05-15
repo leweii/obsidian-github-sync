@@ -45,6 +45,15 @@ export class GitManager {
         "https://github.com/"
       ).catch(() => {});
     }
+    // Large-push tuning. Default postBuffer (1 MB) makes git break the
+    // request into chunks that need to be re-sent on any hiccup; large
+    // vaults hit "RPC failed; HTTP 408" / "Broken pipe" / "Connection
+    // reset by peer" / "unable to rewind rpc post data" routinely.
+    //   postBuffer 500 MB                       — single big send, fewer rewinds
+    //   lowSpeedLimit 1 KB/s, lowSpeedTime 600s — be patient on slow uploads
+    await this.git.addConfig("http.postBuffer", "524288000").catch(() => {});
+    await this.git.addConfig("http.lowSpeedLimit", "1000").catch(() => {});
+    await this.git.addConfig("http.lowSpeedTime", "600").catch(() => {});
   }
 
   async isRepo(): Promise<boolean> {

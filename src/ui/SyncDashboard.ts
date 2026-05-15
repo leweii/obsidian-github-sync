@@ -174,7 +174,7 @@ export class SyncDashboard extends ItemView {
     const addBtn = footer.createEl("button", { cls: "ghs-add-btn" });
     const plusIcon = addBtn.createSpan();
     setIcon(plusIcon, "plus");
-    addBtn.createSpan({ text: "Add Repository" });
+    addBtn.createSpan({ text: "加入子模块" });
     addBtn.onclick = () => new AddSubmoduleModal(this.app, this.plugin).open();
   }
 

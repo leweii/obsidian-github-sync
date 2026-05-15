@@ -21,7 +21,7 @@ export class AddSubmoduleModal extends Modal {
     contentEl.empty();
     contentEl.addClass("ghs-add-modal");
 
-    contentEl.createEl("h3", { text: "Add Repository" });
+    contentEl.createEl("h3", { text: "加入子模块" });
     contentEl.createEl("p", {
       cls: "ghs-add-sub",
       text: "Map a folder in your vault to a GitHub repository (submodule).",
