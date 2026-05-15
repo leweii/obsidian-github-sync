@@ -49,11 +49,42 @@ export class GitManager {
     // request into chunks that need to be re-sent on any hiccup; large
     // vaults hit "RPC failed; HTTP 408" / "Broken pipe" / "Connection
     // reset by peer" / "unable to rewind rpc post data" routinely.
-    //   postBuffer 500 MB                       — single big send, fewer rewinds
+    //   postBuffer 1 GB                         — single big send, fewer rewinds
     //   lowSpeedLimit 1 KB/s, lowSpeedTime 600s — be patient on slow uploads
-    await this.git.addConfig("http.postBuffer", "524288000").catch(() => {});
+    await this.git.addConfig("http.postBuffer", "1073741824").catch(() => {});
     await this.git.addConfig("http.lowSpeedLimit", "1000").catch(() => {});
     await this.git.addConfig("http.lowSpeedTime", "600").catch(() => {});
+  }
+
+  /**
+   * Run a git command, retrying on transient network-layer errors that
+   * commonly hit large pushes: broken pipe, connection reset, RPC failed
+   * (HTTP 408/502/503), send-pack disconnect.
+   */
+  private async runWithRetry(
+    args: string[],
+    maxAttempts = 3,
+    onProgress?: ProgressFn
+  ): Promise<void> {
+    const transientRe = /broken pipe|connection reset|rpc failed|send-pack|operation timed out|http 408|http 5\d\d|early eof|the remote end hung up/i;
+    let lastErr: Error | null = null;
+    for (let i = 0; i < maxAttempts; i++) {
+      try {
+        await this.git.raw(args);
+        return;
+      } catch (e) {
+        lastErr = e as Error;
+        const msg = lastErr.message ?? "";
+        if (!transientRe.test(msg) || i === maxAttempts - 1) throw lastErr;
+        const waitMs = 1000 * Math.pow(2, i); // 1s, 2s, 4s
+        onProgress?.({
+          phase: "pushing",
+          message: `Network blip, retrying push in ${waitMs / 1000}s (attempt ${i + 2}/${maxAttempts})…`,
+        });
+        await new Promise((r) => setTimeout(r, waitMs));
+      }
+    }
+    throw lastErr!;
   }
 
   async isRepo(): Promise<boolean> {
@@ -223,7 +254,7 @@ export class GitManager {
     const committed = await this.stageAndCommit(message, ignore, onProgress);
     if (committed === 0) return 0;
     onProgress?.({ phase: "pushing", message: `Pushing to origin/${branch}` });
-    await this.git.raw(["push", "--set-upstream", "origin", branch]);
+    await this.runWithRetry(["push", "--set-upstream", "origin", branch], 3, onProgress);
     return committed;
   }
 
@@ -238,7 +269,7 @@ export class GitManager {
     onProgress?.({ phase: "committing", message: "Committing merge" });
     await this.git.commit(message);
     onProgress?.({ phase: "pushing", message: `Pushing to origin/${branch}` });
-    await this.git.raw(["push", "--set-upstream", "origin", branch]);
+    await this.runWithRetry(["push", "--set-upstream", "origin", branch], 3, onProgress);
     return stagedCount;
   }
 
@@ -403,7 +434,7 @@ export class GitManager {
 
       // Step 3 — push everything (initial commit + any merge commit).
       opts.onProgress?.({ phase: "pushing", message: `Pushing to origin/${branch}` });
-      await this.git.raw(["push", "--set-upstream", "origin", branch]);
+      await this.runWithRetry(["push", "--set-upstream", "origin", branch], 3, opts.onProgress);
       return localChanges?.total ?? 0;
     }
 
@@ -436,7 +467,7 @@ export class GitManager {
     // Commit any auto-resolved merge files, then push everything.
     await this.stageAndCommit(opts.message, ignore, opts.onProgress);
     opts.onProgress?.({ phase: "pushing", message: `Pushing to origin/${branch}` });
-    await this.git.raw(["push", "--set-upstream", "origin", branch]);
+    await this.runWithRetry(["push", "--set-upstream", "origin", branch], 3, opts.onProgress);
     return 1;
   }
 }
