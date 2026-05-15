@@ -1,9 +1,9 @@
 {
   "id": "github-sync",
   "name": "GitHub Sync",
-  "version": "0.1.18",
+  "version": "0.1.19",
   "minAppVersion": "1.0.0",
-  "description": "Two-way sync your vault and submodules with GitHub repositories",
+  "description": "Two-way sync your vault and submodules with GitHub repositories.",
   "author": "Jakob",
   "authorUrl": "https://github.com/leweii",
   "isDesktopOnly": true
