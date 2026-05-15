@@ -344,7 +344,13 @@ export class SetupWizard extends Modal {
           const ops = this.plugin.getRepoOps("__vault__");
           if (ops) new ConflictModal(this.app, ops, e.conflicts, () => {}, "Main Vault").open();
         } else {
-          const msg = e instanceof Error ? e.message : String(e);
+          // Avoid the useless "[object Object]" that String() would
+          // produce on a plain thrown object — JSON-stringify as a
+          // last resort so the user gets something meaningful.
+          const msg =
+            e instanceof Error ? e.message :
+            typeof e === "string" ? e :
+            (() => { try { return JSON.stringify(e); } catch { return "unknown error"; } })();
           new Notice(`Connection failed: ${msg}`);
         }
       }

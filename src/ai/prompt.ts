@@ -94,14 +94,16 @@ export function parseAIResponse(content: string): {
 
   const rawMerged = obj.merged;
   const merged: string[] = Array.isArray(rawMerged)
-    ? rawMerged.map((s): string => String(s))
-    : String(rawMerged ?? "").split("\n");
+    ? rawMerged.map(stringifyItem)
+    : typeof rawMerged === "string"
+    ? rawMerged.split("\n")
+    : [];
 
   const rawReasoning = obj.reasoning;
   const reasoning: string[] = Array.isArray(rawReasoning)
-    ? rawReasoning.map((s): string => String(s))
-    : rawReasoning != null
-    ? [String(rawReasoning)]
+    ? rawReasoning.map(stringifyItem)
+    : typeof rawReasoning === "string"
+    ? [rawReasoning]
     : [];
 
   const confidence = clamp(Number(obj.confidence) || 0, 0, 5);
@@ -118,4 +120,20 @@ export function parseAIResponse(content: string): {
 
 function clamp(n: number, lo: number, hi: number): number {
   return Math.min(hi, Math.max(lo, n));
+}
+
+/**
+ * Safely render an item from a raw LLM array as a string. Strings pass
+ * through; numbers/booleans coerce sensibly; objects (which `String()`
+ * would render as the useless "[object Object]") become JSON.
+ */
+function stringifyItem(v: unknown): string {
+  if (typeof v === "string") return v;
+  if (typeof v === "number" || typeof v === "boolean") return String(v);
+  if (v == null) return "";
+  try {
+    return JSON.stringify(v);
+  } catch {
+    return "";
+  }
 }
