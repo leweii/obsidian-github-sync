@@ -352,6 +352,30 @@ export class GitManager {
    *   - vault is a repo, no origin       → addRemote
    *   - vault is a repo, origin differs  → set-url
    */
+  /**
+   * Exercise git's actual auth path against a remote URL by running
+   * `ls-remote`. This is the same credential flow sync uses: simple-git
+   * reads `.git/config` for the vault, applies the `insteadOf` rewrite,
+   * and falls back to the system credential helper otherwise. So a
+   * failure here matches what a real sync would see.
+   *
+   * Used by the diagnostic "Test connection" button to catch stale
+   * macOS keychain entries, missing insteadOf rules, or SSO-blocked
+   * tokens that the API-level checks don't surface.
+   */
+  async testRemote(remoteUrl: string): Promise<{ ok: boolean; message?: string }> {
+    try {
+      await this.git.raw(["ls-remote", "--exit-code", "--heads", remoteUrl]);
+      return { ok: true };
+    } catch (e) {
+      // simple-git puts stderr in .message; trim the noisy "fatal: " prefix
+      // chain so the UI shows the actionable line.
+      let msg = (e as Error).message ?? "ls-remote failed";
+      msg = msg.replace(/^.*?(fatal:|remote:)/i, "$1").split("\n")[0].trim();
+      return { ok: false, message: msg };
+    }
+  }
+
   async setOrigin(remoteUrl: string, branch = "main"): Promise<void> {
     if (!(await this.isRepo())) {
       await this.initRepo(remoteUrl, branch);

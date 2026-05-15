@@ -3,6 +3,7 @@ import type GitHubSyncPlugin from "./main";
 import type { SyncHistoryEntry } from "./types";
 import { L, setLang, tf, type Lang } from "./i18n";
 import { isValidGitHubUrl } from "./git/SubmoduleManager";
+import { checkRepoAccess } from "./git/githubApi";
 
 export interface SubmoduleConfig {
   id: string;
@@ -447,48 +448,97 @@ export class GitHubSyncSettingTab extends PluginSettingTab {
     if (desc) wrap.createEl("p", { text: desc, cls: "ghs-section-desc" });
   }
 
-  private async testConnection(badge: HTMLElement): Promise<void> {
+  private async testConnection(container: HTMLElement): Promise<void> {
     const t = L().settings;
-    badge.empty();
-    badge.style.display = "";
-    badge.removeClass("valid", "invalid", "loading");
-    badge.addClass("loading");
-    setIcon(badge.createSpan(), "loader-2");
-    badge.createSpan({ text: t.testVerifying });
+    container.empty();
+    container.style.display = "flex";
+    container.style.flexDirection = "column";
+    container.style.alignItems = "flex-start";
+    container.style.gap = "4px";
 
     const token = this.plugin.settings.githubToken;
     if (!token) {
-      badge.empty();
-      badge.removeClass("loading");
-      badge.addClass("invalid");
-      setIcon(badge.createSpan(), "alert-circle");
-      badge.createSpan({ text: t.testNoToken });
+      this.addDiagRow(container, t.testNoToken, "error");
       return;
     }
 
+    // ── Step 1: Token /user ─────────────────────────────────────
+    const tokenRow = this.addDiagRow(container, t.testVerifying, "loading");
+    let login = "";
     try {
       const res = await requestUrl({
         url: "https://api.github.com/user",
         headers: { Authorization: `token ${token}`, "User-Agent": "ObsidianGitHubSync" },
         throw: false,
       });
-      badge.empty();
-      badge.removeClass("loading");
       if (res.status === 200) {
-        badge.addClass("valid");
-        setIcon(badge.createSpan(), "check-circle");
-        badge.createSpan({ text: tf(t.testConnected, res.json.login) });
+        login = res.json.login;
+        this.setDiagRow(tokenRow, tf(t.testConnected, login), "success");
       } else {
-        badge.addClass("invalid");
-        setIcon(badge.createSpan(), "alert-circle");
-        badge.createSpan({ text: tf(t.testReturned, res.status) });
+        this.setDiagRow(tokenRow, tf(t.testReturned, res.status), "error");
+        return;
       }
     } catch (e) {
-      badge.empty();
-      badge.removeClass("loading");
-      badge.addClass("invalid");
-      setIcon(badge.createSpan(), "alert-circle");
-      badge.createSpan({ text: tf(t.testFailed, (e as Error).message) });
+      this.setDiagRow(tokenRow, tf(t.testFailed, (e as Error).message), "error");
+      return;
     }
+
+    // ── Steps 2 + 3: per-repo checks ────────────────────────────
+    const targets: Array<{ label: string; url: string }> = [];
+    if (this.plugin.settings.mainRepoUrl) {
+      targets.push({ label: "Main vault", url: this.plugin.settings.mainRepoUrl });
+    }
+    for (const sub of this.plugin.settings.submodules) {
+      targets.push({ label: sub.localPath, url: sub.remoteUrl });
+    }
+    if (targets.length === 0) {
+      this.addDiagRow(container, "No repositories configured to check.", "success");
+      return;
+    }
+
+    for (const { label, url } of targets) {
+      // 2: GitHub API repo-access check
+      const apiRow = this.addDiagRow(container, `${label} — checking repo access…`, "loading");
+      const access = await checkRepoAccess(url, token);
+      if (!access.ok) {
+        this.setDiagRow(apiRow, `${label} — ${access.reason} (HTTP ${access.status})`, "error");
+        continue; // skip git step if API can't even see it
+      }
+      const pushTag = access.canPush ? "read+write" : "read only";
+      const emptyTag = access.isEmpty ? ", empty (will auto-init)" : "";
+      this.setDiagRow(apiRow, `${label} — ${access.fullName} (${pushTag}${emptyTag})`, "success");
+
+      // 3: git ls-remote via plugin's GitManager (real auth path)
+      const gitRow = this.addDiagRow(container, `${label} — testing git auth…`, "loading");
+      const ls = await this.plugin.gitManager.testRemote(url);
+      if (ls.ok) {
+        this.setDiagRow(gitRow, `${label} — git auth OK`, "success");
+      } else {
+        this.setDiagRow(gitRow, `${label} — git auth failed: ${ls.message}`, "error");
+      }
+    }
+  }
+
+  private addDiagRow(
+    container: HTMLElement,
+    text: string,
+    status: "success" | "error" | "loading",
+  ): HTMLElement {
+    const row = container.createDiv({ cls: `ghs-status-badge ${status}` });
+    setIcon(row.createSpan(), status === "success" ? "check-circle" : status === "error" ? "alert-circle" : "loader-2");
+    row.createSpan({ text });
+    return row;
+  }
+
+  private setDiagRow(
+    row: HTMLElement,
+    text: string,
+    status: "success" | "error" | "loading",
+  ): void {
+    row.empty();
+    row.removeClass("success", "error", "loading");
+    row.addClass(status);
+    setIcon(row.createSpan(), status === "success" ? "check-circle" : status === "error" ? "alert-circle" : "loader-2");
+    row.createSpan({ text });
   }
 }

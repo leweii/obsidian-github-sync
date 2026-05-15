@@ -11,6 +11,66 @@ export function parseOwnerRepo(url: string): { owner: string; repo: string } | n
   return { owner: m[1], repo: m[2] };
 }
 
+export interface RepoAccessCheck {
+  ok: boolean;
+  // populated when ok === true
+  fullName?: string;
+  canPush?: boolean;
+  isEmpty?: boolean;
+  // populated when ok === false
+  status?: number;
+  reason?: string;
+}
+
+/**
+ * Probe a GitHub repo URL for access and write permission. Returns a
+ * structured result the caller can render in a diagnostic UI; never
+ * throws.
+ *
+ * - `status: 200 + permissions.push` → token can write
+ * - `status: 200, permissions.push=false` → token can read but not push
+ * - `status: 404` → repo doesn't exist or token can't see it (private)
+ * - `status: 401/403` → token rejected (often SSO not authorized)
+ */
+export async function checkRepoAccess(
+  remoteUrl: string,
+  token: string,
+): Promise<RepoAccessCheck> {
+  const parsed = parseOwnerRepo(remoteUrl);
+  if (!parsed) {
+    return { ok: false, status: 0, reason: "Not a github.com URL" };
+  }
+  const { owner, repo } = parsed;
+  const headers = token
+    ? { Authorization: `token ${token}`, "User-Agent": "ObsidianGitHubSync" }
+    : { "User-Agent": "ObsidianGitHubSync" };
+  const res = await requestUrl({
+    url: `https://api.github.com/repos/${owner}/${repo}`,
+    headers,
+    throw: false,
+  });
+  if (res.status !== 200) {
+    const apiMsg = res.json?.message;
+    const reason =
+      res.status === 404 ? "Repository not found (or no read access)"
+      : res.status === 401 ? "Token rejected"
+      : res.status === 403 ? (apiMsg?.includes("SAML") ? "SSO not authorized for this token" : "Access forbidden")
+      : `GitHub returned ${res.status}`;
+    return { ok: false, status: res.status, reason };
+  }
+  const fullName = res.json?.full_name ?? `${owner}/${repo}`;
+  const canPush = !!res.json?.permissions?.push;
+  // Cheap follow-up: check for empty repo (only matters for diagnostic
+  // completeness — auto-init already handles it).
+  const commits = await requestUrl({
+    url: `https://api.github.com/repos/${owner}/${repo}/commits?per_page=1`,
+    headers,
+    throw: false,
+  });
+  const isEmpty = commits.status === 409;
+  return { ok: true, fullName, canPush, isEmpty };
+}
+
 /**
  * If the remote GitHub repo has no commits, create an initial README via
  * the Contents API so subsequent git operations (clone, submodule add,
