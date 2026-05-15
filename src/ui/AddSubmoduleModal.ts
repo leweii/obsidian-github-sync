@@ -192,16 +192,20 @@ export class AddSubmoduleModal extends Modal {
       syncInterval: this.plugin.settings.autoSyncInterval,
     };
 
-    if (this.submitBtn) this.submitBtn.disabled = true;
+    if (this.submitBtn) {
+      this.submitBtn.disabled = true;
+      this.submitBtn.textContent = "Adding…";
+    }
     try {
-      await this.plugin.submoduleManager.add(config);
-      this.plugin.settings.submodules.push(config);
-      await this.plugin.saveSettings();
+      await this.plugin.addSubmodule(config);
       new Notice(`Added "${this.localPath}"`);
       this.close();
     } catch (e) {
       new Notice(`Failed: ${(e as Error).message}`);
-      if (this.submitBtn) this.submitBtn.disabled = false;
+      if (this.submitBtn) {
+        this.submitBtn.disabled = false;
+        this.submitBtn.textContent = "Add";
+      }
     }
   }
 

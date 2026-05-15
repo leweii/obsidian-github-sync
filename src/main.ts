@@ -205,6 +205,23 @@ export default class GitHubSyncPlugin extends Plugin {
     await this.scheduler.runVault("chore: initial vault sync");
   }
 
+  /**
+   * Register and clone a new submodule, then push the parent vault so
+   * other machines pick it up. `submoduleManager.add()` only stages
+   * .gitmodules + the submodule pointer locally; without a follow-up
+   * vault sync those would just sit in the index until the next manual
+   * sync. saveSettings() also writes .github-sync.json — same problem.
+   */
+  async addSubmodule(config: SubmoduleConfig): Promise<void> {
+    await this.submoduleManager.add(config);
+    this.settings.submodules.push(config);
+    await this.saveSettings();
+    try {
+      await this.scheduler.runVault(`chore: add submodule ${config.localPath}`);
+    } catch { /* swallow — settings are saved either way */ }
+    this.dashboard?.refreshRepos();
+  }
+
   async removeSubmodule(id: string): Promise<void> {
     const sub = this.settings.submodules.find((s) => s.id === id);
     if (!sub) return;
