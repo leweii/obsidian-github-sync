@@ -21,7 +21,7 @@ export class AddSubmoduleModal extends Modal {
     contentEl.empty();
     contentEl.addClass("ghs-add-modal");
 
-    contentEl.createEl("h3", { text: "加入子模块" });
+    contentEl.createEl("h3", { text: "Add Submodule" });
     contentEl.createEl("p", {
       cls: "ghs-add-sub",
       text: "Map a folder in your vault to a GitHub repository (submodule).",
@@ -115,17 +115,32 @@ export class AddSubmoduleModal extends Modal {
       return;
     }
     const [, owner, repo] = match;
+    const headers = token
+      ? { Authorization: `token ${token}`, "User-Agent": "ObsidianGitHubSync" }
+      : { "User-Agent": "ObsidianGitHubSync" };
     try {
       const res = await requestUrl({
         url: `https://api.github.com/repos/${owner}/${repo}`,
-        headers: token
-          ? { Authorization: `token ${token}`, "User-Agent": "ObsidianGitHubSync" }
-          : { "User-Agent": "ObsidianGitHubSync" },
+        headers,
         throw: false,
       });
       if (res.status === 200) {
-        this.remoteStatus = "valid";
-        this.remoteMsg = `Found ${owner}/${repo}`;
+        // Repo exists, but `git submodule add` will fail with
+        // "branch yet to be born" if it has no commits. GitHub returns
+        // 409 on /commits for empty repos — block the submit early with
+        // a useful hint instead of letting git produce a cryptic error.
+        const commits = await requestUrl({
+          url: `https://api.github.com/repos/${owner}/${repo}/commits?per_page=1`,
+          headers,
+          throw: false,
+        });
+        if (commits.status === 409) {
+          this.remoteStatus = "invalid";
+          this.remoteMsg = "Repository is empty — push an initial commit first";
+        } else {
+          this.remoteStatus = "valid";
+          this.remoteMsg = `Found ${owner}/${repo}`;
+        }
       } else if (res.status === 404) {
         this.remoteStatus = "invalid";
         this.remoteMsg = "Repository not found";
@@ -201,7 +216,14 @@ export class AddSubmoduleModal extends Modal {
       new Notice(`Added "${this.localPath}"`);
       this.close();
     } catch (e) {
-      new Notice(`Failed: ${(e as Error).message}`);
+      const raw = (e as Error).message ?? "";
+      // `git submodule add` against an empty remote produces a cryptic
+      // "branch yet to be born" message — translate it. (probeRemote
+      // normally blocks this, but offline-fallback can let it through.)
+      const msg = /yet to be born|unable to checkout submodule/i.test(raw)
+        ? "Repository is empty — push an initial commit on GitHub first."
+        : raw;
+      new Notice(`Failed: ${msg}`, 8000);
       if (this.submitBtn) {
         this.submitBtn.disabled = false;
         this.submitBtn.textContent = "Add";

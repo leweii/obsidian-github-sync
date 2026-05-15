@@ -128,7 +128,7 @@ const en = {
     noRepos:          "No repositories configured yet.",
     openSettings:     "Open Settings",
     recentActivity:   "Recent activity",
-    addRepository:    "加入子模块",
+    addRepository:    "Add Submodule",
     previewChanges:   "Preview changes",
     resolve:          "Resolve",
     pending:          "{0} pending",
