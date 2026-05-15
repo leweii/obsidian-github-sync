@@ -6,11 +6,17 @@ export function friendlyError(raw: string): string {
   if (m.includes("authentication failed") || m.includes("invalid username or password")) {
     return "Authentication failed — check your Personal Access Token in Settings.";
   }
+  if (m.includes("saml") || m.includes("sso")) {
+    return "Token needs SSO authorization for this org. Visit GitHub → Settings → Developer settings → PATs and click 'Configure SSO' on this token.";
+  }
   if (m.includes("403") && m.includes("github")) {
-    return "GitHub rejected the request (403). Token may lack 'repo' scope.";
+    // 403 is overloaded: missing scope OR the token's account just doesn't
+    // have write access to this repo (most common when helping someone else
+    // configure the plugin with YOUR token).
+    return "GitHub rejected the request (403). Possible causes: (1) the token's GitHub account isn't a collaborator on this repo, (2) the token is missing 'repo' scope, or (3) the org requires SSO authorization for the token.";
   }
   if (m.includes("404") && (m.includes("not found") || m.includes("repository"))) {
-    return "Repository not found. Verify the remote URL.";
+    return "Repository not found, or the token's account can't see it (private repo without access).";
   }
   if (m.includes("could not resolve host") || m.includes("enotfound") || m.includes("network")) {
     return "Network error — check your connection.";
