@@ -1,8 +1,8 @@
-# GitHub Sync
+# Smart Vault Sync
 
-**Sync your Obsidian vault with GitHub — including nested folders as separate repos — without ever touching a terminal.**
+**AI-assisted two-way sync between your Obsidian vault and GitHub — including nested folders as separate repos — without ever touching a terminal.**
 
-Most git-based Obsidian plugins assume you know git. This one doesn't. Three things make it different:
+Most git-based Obsidian sync plugins assume you know git. This one doesn't. Three things make it different:
 
 ### 🧩 Real submodule support, not just one repo
 
@@ -10,7 +10,7 @@ Map any folder in your vault to its own GitHub repo. Keep personal notes private
 
 ### 🤖 AI-drafted commit messages
 
-Optional, but built in. Let DeepSeek or Gemini read your diff and propose a clean semantic commit message (`feat: …`, `fix: …`, `docs: …`). You can always edit before committing. Tokens stay local, only the diff goes to the LLM, and you can exclude any path patterns from being sent.
+Built in, optional. Let DeepSeek or Gemini read your diff and propose a clean semantic commit message (`feat: …`, `fix: …`, `docs: …`). You always get to edit before committing. Tokens stay local, only the diff goes to the LLM, and you can exclude any path patterns from being sent.
 
 ### 👶 Designed for users who don't know git
 
@@ -25,14 +25,14 @@ Optional, but built in. Let DeepSeek or Gemini read your diff and propose a clea
 ### Community plugins (once approved)
 
 1. Open **Settings → Community plugins**
-2. Click **Browse**, search for **GitHub Sync**
+2. Click **Browse**, search for **Smart Vault Sync**
 3. Click **Install**, then **Enable**
 
 ### Manual install
 
 1. Download `main.js`, `manifest.json`, and `styles.css` from the [latest release](https://github.com/leweii/obsidian-github-sync/releases/latest)
-2. Copy them into `<your-vault>/.obsidian/plugins/github-sync/`
-3. Restart Obsidian, then enable **GitHub Sync** under Settings → Community plugins
+2. Copy them into `<your-vault>/.obsidian/plugins/smart-vault-sync/`
+3. Restart Obsidian, then enable **Smart Vault Sync** under Settings → Community plugins
 
 ## Getting started
 
@@ -48,16 +48,16 @@ The setup wizard appears automatically on first launch. Three short steps:
 
 | File | Where | Contains | Travels with the repo? |
 |---|---|---|---|
-| `data.json` | `<vault>/.obsidian/plugins/github-sync/` | Your tokens, sync history, per-machine state | ❌ Local only |
+| `data.json` | `<vault>/.obsidian/plugins/smart-vault-sync/` | Your tokens, sync history, per-machine state | ❌ Local only |
 | `.github-sync.json` | `<vault>/` | Remote URLs, branches, AI model choice, submodule list | ✅ Committed (so a fresh clone on a new machine picks up your config automatically) |
 
 **Secrets never leave your device.** The plugin's own `.gitignore` excludes `.obsidian/`, and `.github-sync.json`'s schema has no token fields at all — there's no path by which the plugin can leak credentials into a commit.
 
 ## Troubleshooting
 
-**`Permission denied` or `403` on push.** Open Settings → GitHub Sync → **Test connection**. The third row (`git auth`) exercises the same credential path your sync uses. If that row fails while the API rows pass, your local git is using stale credentials (most commonly the macOS Keychain) — erase the cached entry or rotate the token.
+**`Permission denied` or `403` on push.** Open Settings → Smart Vault Sync → **Test connection**. The third row (`git auth`) exercises the same credential path your sync uses. If that row fails while the API rows pass, your local git is using stale credentials (most commonly the macOS Keychain) — erase the cached entry or rotate the token.
 
-**Token sticks around after uninstall.** Obsidian preserves plugin data across reinstalls by design. To fully wipe credentials, delete `<vault>/.obsidian/plugins/github-sync/data.json`.
+**Token sticks around after uninstall.** Obsidian preserves plugin data across reinstalls by design. To fully wipe credentials, delete `<vault>/.obsidian/plugins/smart-vault-sync/data.json`.
 
 ## License
 
