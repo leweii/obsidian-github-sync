@@ -187,7 +187,7 @@ export class GitHubSyncSettingTab extends PluginSettingTab {
 
   private renderRepository(parent: HTMLElement): void {
     const t = L().settings;
-    this.sectionHeader(parent, t.sectionRepo, undefined, "shared");
+    this.sectionHeader(parent, t.sectionRepo);
 
     const s = this.plugin.settings;
     let urlInputEl: HTMLInputElement | null = null;
@@ -299,7 +299,7 @@ export class GitHubSyncSettingTab extends PluginSettingTab {
 
   private renderAccount(parent: HTMLElement): void {
     const t = L().settings;
-    this.sectionHeader(parent, t.sectionAccount, undefined, "local");
+    this.sectionHeader(parent, t.sectionAccount);
 
     let tokenInputEl: HTMLInputElement | null = null;
     const testBadge = createDiv("ghs-inline-badge ghs-test-badge");
@@ -361,7 +361,7 @@ export class GitHubSyncSettingTab extends PluginSettingTab {
 
   private renderAI(parent: HTMLElement): void {
     const t = L().settings;
-    this.sectionHeader(parent, t.sectionAI, undefined, "local");
+    this.sectionHeader(parent, t.sectionAI);
 
     let dsInputEl: HTMLInputElement | null = null;
     new Setting(parent)
@@ -410,7 +410,7 @@ export class GitHubSyncSettingTab extends PluginSettingTab {
 
   private renderGeneral(parent: HTMLElement): void {
     const t = L().settings;
-    this.sectionHeader(parent, t.sectionGeneral, undefined, "local");
+    this.sectionHeader(parent, t.sectionGeneral);
 
     new Setting(parent)
       .setName(t.sectionLanguage)
@@ -428,16 +428,6 @@ export class GitHubSyncSettingTab extends PluginSettingTab {
       );
 
     new Setting(parent)
-      .setName(t.syncOnStartupLabel)
-      .setDesc(t.syncOnStartupDesc)
-      .addToggle((tg) =>
-        tg.setValue(this.plugin.settings.syncOnStartup ?? true).onChange(async (v) => {
-          this.plugin.settings.syncOnStartup = v;
-          await this.plugin.saveSettings();
-        })
-      );
-
-    new Setting(parent)
       .setName(t.clearHistory)
       .addButton((b) =>
         b.setButtonText(L().common.clear).setWarning().onClick(async () => {
@@ -450,22 +440,10 @@ export class GitHubSyncSettingTab extends PluginSettingTab {
 
   // ── Helpers ──────────────────────────────────────────────────
 
-  private sectionHeader(
-    parent: HTMLElement,
-    title: string,
-    desc?: string,
-    scope?: "local" | "shared"
-  ): void {
-    const t = L().settings;
+  private sectionHeader(parent: HTMLElement, title: string, desc?: string): void {
     const wrap = parent.createDiv("ghs-section-header");
     const titleRow = wrap.createDiv("ghs-section-title-row");
     titleRow.createEl("h3", { text: title, cls: "setting-item-heading" });
-    if (scope) {
-      titleRow.createEl("span", {
-        cls: `ghs-scope-tag ${scope === "shared" ? "repo" : "local"}`,
-        text: scope === "shared" ? t.scopeShared : t.scopeLocal,
-      });
-    }
     if (desc) wrap.createEl("p", { text: desc, cls: "ghs-section-desc" });
   }
 

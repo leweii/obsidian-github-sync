@@ -33,7 +33,7 @@ const en = {
   },
 
   settings: {
-    sectionAccount:      "Account",
+    sectionAccount:      "GitHub Account",
     sectionAccountDesc:  "Credentials stored only on this device — never committed.",
     sectionAI:           "AI",
     sectionAIDesc:       "Optional. Used to auto-resolve merge conflicts. Stored locally.",
@@ -293,7 +293,7 @@ const zh: typeof en = {
   },
 
   settings: {
-    sectionAccount:      "账户",
+    sectionAccount:      "GitHub 账户",
     sectionAccountDesc:  "凭证仅保存在本机，不会提交到仓库。",
     sectionAI:           "AI",
     sectionAIDesc:       "可选。用于自动解决合并冲突，仅本地存储。",
