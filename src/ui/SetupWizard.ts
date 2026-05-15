@@ -293,6 +293,12 @@ export class SetupWizard extends Modal {
       finishBtn.textContent = "Connecting…";
 
       try {
+        // Update origin BEFORE sync. Without this, switching to a new repo
+        // URL would still push/pull against whatever origin .git/config
+        // already had — e.g., the vault used to point at repo A, the user
+        // types repo B's URL into the wizard, sync runs `git pull origin`
+        // and fails with 403 against repo A's URL.
+        await this.plugin.gitManager.setOrigin(url, branch);
         await this.plugin.gitManager.sync({
           branch,
           remoteUrl: url,
