@@ -51,9 +51,15 @@ export class GitManager {
     // reset by peer" / "unable to rewind rpc post data" routinely.
     //   postBuffer 1 GB                         — single big send, fewer rewinds
     //   lowSpeedLimit 1 KB/s, lowSpeedTime 600s — be patient on slow uploads
+    //   http.version HTTP/1.1                   — avoid HTTP/2 multiplexing
+    //                                             issues that some proxies /
+    //                                             firewalls cause on long
+    //                                             uploads ("broken pipe",
+    //                                             "send-pack disconnect")
     await this.git.addConfig("http.postBuffer", "1073741824").catch(() => {});
     await this.git.addConfig("http.lowSpeedLimit", "1000").catch(() => {});
     await this.git.addConfig("http.lowSpeedTime", "600").catch(() => {});
+    await this.git.addConfig("http.version", "HTTP/1.1").catch(() => {});
   }
 
   /**
