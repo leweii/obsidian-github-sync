@@ -279,7 +279,8 @@ describe("sync() — new vault, empty remote", () => {
 
     const gi = read(vault, ".gitignore");
     expect(gi).toContain(".DS_Store");
-    expect(gi).toContain(".obsidian/plugins/");
+    expect(gi).toContain(".obsidian/");
+    expect(gi).toContain(".trash/");
   });
 
   it("pushes to remote — remote has the commit", async () => {

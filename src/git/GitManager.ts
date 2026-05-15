@@ -298,13 +298,38 @@ export class GitManager {
     }
   }
 
+  /**
+   * Make sure the vault has `origin` pointing at `remoteUrl`. Used by the
+   * settings page when the user updates the URL or initialises the vault
+   * inline. Handles three states:
+   *   - vault not a git repo yet         → initRepo()
+   *   - vault is a repo, no origin       → addRemote
+   *   - vault is a repo, origin differs  → set-url
+   */
+  async setOrigin(remoteUrl: string, branch = "main"): Promise<void> {
+    if (!(await this.isRepo())) {
+      await this.initRepo(remoteUrl, branch);
+      return;
+    }
+    const remotes = await this.git.getRemotes(true);
+    const origin = remotes.find((r) => r.name === "origin");
+    if (!origin) {
+      await this.git.addRemote("origin", remoteUrl);
+    } else if (origin.refs.fetch !== remoteUrl && origin.refs.push !== remoteUrl) {
+      await this.git.remote(["set-url", "origin", remoteUrl]);
+    }
+  }
+
   async initRepo(remoteUrl: string, branch: string): Promise<void> {
     await this.git.init();
     await this.configureGit();
     await this.git.raw(["checkout", "-b", branch]).catch(() => {});
     await this.git.addRemote("origin", remoteUrl).catch(() => {});
-    // Write a .gitignore so git itself never tracks OS noise or local plugin
-    // installations — ignorePatterns alone only filters the commit stage.
+    // Write a .gitignore so git itself never tracks OS noise, the entire
+    // .obsidian config dir (per-machine UI state, installed plugins, themes,
+    // hotkeys), or the local trash. ignorePatterns in settings is only a
+    // commit-stage filter — .gitignore stops the file from being seen by
+    // git at all.
     const gitignorePath = `${this.vaultPath}/.gitignore`;
     if (!fs.existsSync(gitignorePath)) {
       fs.writeFileSync(
@@ -312,10 +337,7 @@ export class GitManager {
         [
           ".DS_Store",
           "Thumbs.db",
-          ".obsidian/workspace.json",
-          ".obsidian/workspace-mobile.json",
-          ".obsidian/plugins/",
-          ".obsidian/themes/",
+          ".obsidian/",
           ".trash/",
         ].join("\n") + "\n"
       );

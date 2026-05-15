@@ -2,6 +2,7 @@ import { App, Notice, PluginSettingTab, Setting, requestUrl, setIcon } from "obs
 import type GitHubSyncPlugin from "./main";
 import type { SyncHistoryEntry } from "./types";
 import { L, setLang, tf, type Lang } from "./i18n";
+import { isValidGitHubUrl } from "./git/SubmoduleManager";
 
 export interface SubmoduleConfig {
   id: string;
@@ -57,10 +58,7 @@ export const DEFAULT_SETTINGS: GitHubSyncSettings = {
   submodules: [],
   ignorePatterns: [
     ".DS_Store",
-    ".obsidian/workspace.json",
-    ".obsidian/workspace-mobile.json",
-    ".obsidian/plugins/**",
-    ".obsidian/themes/**",
+    ".obsidian/**",
     ".trash/**",
   ],
   historyLimit: 20,
@@ -71,7 +69,7 @@ export const DEFAULT_SETTINGS: GitHubSyncSettings = {
     silentMode: false,
     silentMinConfidence: 3,
     deepseekToken: "",
-    deepseekModel: "deepseek-chat",
+    deepseekModel: "deepseek-v4-flash",
     geminiToken: "",
     geminiModel: "gemini-1.5-flash",
     sendFilePaths: true,
@@ -192,44 +190,109 @@ export class GitHubSyncSettingTab extends PluginSettingTab {
     this.sectionHeader(parent, t.sectionRepo, undefined, "shared");
 
     const s = this.plugin.settings;
+    let urlInputEl: HTMLInputElement | null = null;
+    let branchInputEl: HTMLInputElement | null = null;
+    const statusEl = createDiv("ghs-inline-badge ghs-repo-status");
+    statusEl.style.display = "none";
 
-    if (!s.mainRepoUrl && s.submodules.length === 0) {
-      new Setting(parent)
-        .setName(t.noRepo)
-        .addButton((b) =>
-          b.setButtonText(t.connectRepo).setCta().onClick(() => {
-            const { SetupWizard } = require("./ui/SetupWizard");
-            new SetupWizard(this.app, this.plugin).open();
-          })
-        );
-      return;
-    }
+    const isValidUrl = (u: string) => isValidGitHubUrl(u.trim());
 
-    if (s.mainRepoUrl) {
-      new Setting(parent)
-        .setName(t.mainVaultLabel)
-        .setDesc(`${s.mainRepoUrl} · ${s.mainRepoBranch || "main"}`)
-        .setClass("ghs-readonly-setting");
-    }
-
-    for (const sub of s.submodules) {
-      new Setting(parent)
-        .setName(sub.localPath)
-        .setDesc(`${sub.remoteUrl} · ${sub.branch}`)
-        .setClass("ghs-readonly-setting");
-    }
-
-    const autoSyncLabel = s.autoSyncInterval > 0
-      ? tf(t.autoSyncEvery, s.autoSyncInterval)
-      : t.autoSyncDisabled;
+    // Editable URL field.
     new Setting(parent)
-      .setName(autoSyncLabel)
-      .addButton((b) =>
-        b.setButtonText(t.reconfigure).onClick(() => {
-          const { SetupWizard } = require("./ui/SetupWizard");
-          new SetupWizard(this.app, this.plugin).open();
-        })
+      .setName(t.repoUrlLabel)
+      .setDesc(t.repoUrlDesc)
+      .addText((tx) => {
+        urlInputEl = tx.inputEl;
+        tx.setPlaceholder(t.repoUrlPlaceholder)
+          .setValue(s.mainRepoUrl)
+          .onChange((v) => {
+            this.plugin.settings.mainRepoUrl = v.trim();
+          });
+        tx.inputEl.style.minWidth = "320px";
+      });
+
+    // Editable branch field.
+    new Setting(parent)
+      .setName(t.repoBranchLabel)
+      .addText((tx) => {
+        branchInputEl = tx.inputEl;
+        tx.setPlaceholder(t.repoBranchPlaceholder)
+          .setValue(s.mainRepoBranch || "main")
+          .onChange((v) => {
+            this.plugin.settings.mainRepoBranch = v.trim() || "main";
+          });
+      });
+
+    // Auto-sync interval (editable inline, replaces the old "Reconfigure" button).
+    new Setting(parent)
+      .setName(s.autoSyncInterval > 0
+        ? tf(t.autoSyncEvery, s.autoSyncInterval)
+        : t.autoSyncDisabled)
+      .addSlider((sl) =>
+        sl.setLimits(0, 120, 5)
+          .setValue(s.autoSyncInterval)
+          .setDynamicTooltip()
+          .onChange(async (v) => {
+            this.plugin.settings.autoSyncInterval = v;
+            await this.plugin.saveSettings();
+            this.plugin.scheduler.start();
+            this.display();
+          })
       );
+
+    // Connect / Save & sync button.
+    new Setting(parent)
+      .setName("")
+      .addButton((b) => {
+        const initial = s.mainRepoUrl ? t.repoSaveAndSync : t.repoInitialize;
+        b.setButtonText(initial).setCta().onClick(async () => {
+          const url = urlInputEl?.value.trim() ?? "";
+          const branch = branchInputEl?.value.trim() || "main";
+          if (!url) { new Notice(t.repoUrlInvalid); return; }
+          if (!isValidUrl(url)) { new Notice(t.repoUrlInvalid); return; }
+
+          b.setDisabled(true);
+          b.setButtonText(t.repoConnecting);
+          this.showRepoStatus(statusEl, "loading", t.repoConnecting);
+
+          try {
+            await this.plugin.connectMainRepo(url, branch);
+            this.showRepoStatus(statusEl, "valid", t.repoConnected);
+            b.setDisabled(false);
+            b.setButtonText(t.repoSaveAndSync);
+          } catch (e) {
+            this.showRepoStatus(statusEl, "invalid", tf(t.repoConnectFailed, (e as Error).message));
+            b.setDisabled(false);
+            b.setButtonText(initial);
+          }
+        });
+      });
+    parent.appendChild(statusEl);
+
+    // Submodules list (read-only — managed in the dashboard).
+    if (s.submodules.length > 0) {
+      const subHeader = parent.createDiv("ghs-subsection-header");
+      subHeader.createEl("h4", { text: t.repoSubmodules });
+      subHeader.createSpan({ cls: "ghs-subsection-meta", text: `${s.submodules.length}` });
+      for (const sub of s.submodules) {
+        new Setting(parent)
+          .setName(sub.localPath)
+          .setDesc(`${sub.remoteUrl} · ${sub.branch}`)
+          .setClass("ghs-readonly-setting");
+      }
+    }
+  }
+
+  private showRepoStatus(badge: HTMLElement, kind: "loading" | "valid" | "invalid", text: string): void {
+    badge.empty();
+    badge.style.display = "";
+    badge.removeClass("loading", "valid", "invalid");
+    badge.addClass(kind);
+    setIcon(
+      badge.createSpan(),
+      kind === "loading" ? "loader-2" : kind === "valid" ? "check-circle" : "alert-circle"
+    );
+    badge.createSpan({ text });
   }
 
   // ── 2. Account (token + identity) ────────────────────────────

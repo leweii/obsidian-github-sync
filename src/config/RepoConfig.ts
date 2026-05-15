@@ -62,7 +62,7 @@ export function parseRepoConfig(raw: unknown): RepoConfigV1 | null {
       silentMode: typeof ai.silentMode === "boolean" ? ai.silentMode : false,
       silentMinConfidence:
         typeof ai.silentMinConfidence === "number" ? ai.silentMinConfidence : 3,
-      deepseekModel: typeof ai.deepseekModel === "string" ? ai.deepseekModel : "deepseek-chat",
+      deepseekModel: typeof ai.deepseekModel === "string" ? ai.deepseekModel : "deepseek-v4-flash",
       geminiModel: typeof ai.geminiModel === "string" ? ai.geminiModel : "gemini-1.5-flash",
       sendFilePaths: typeof ai.sendFilePaths === "boolean" ? ai.sendFilePaths : true,
       sendGitMetadata: typeof ai.sendGitMetadata === "boolean" ? ai.sendGitMetadata : true,

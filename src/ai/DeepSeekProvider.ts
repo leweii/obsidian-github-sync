@@ -28,7 +28,7 @@ export class DeepSeekProvider implements AIProvider {
   private baseUrl: string;
 
   constructor(private cfg: DeepSeekConfig) {
-    this.model = cfg.model ?? "deepseek-chat";
+    this.model = cfg.model ?? "deepseek-v4-flash";
     this.maxTokens = cfg.maxTokens ?? 4096;
     this.temperature = cfg.temperature ?? 0.2;
     this.baseUrl = cfg.baseUrl ?? "https://api.deepseek.com";

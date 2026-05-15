@@ -182,6 +182,29 @@ export default class GitHubSyncPlugin extends Plugin {
     await this.scheduler.run();
   }
 
+  /**
+   * Inline init/save of the main vault repo from the Settings page.
+   * Replaces the SetupWizard's repo step for the simple case:
+   *   - save URL + branch to settings (writes data.json AND .github-sync.json)
+   *   - rebuild GitManager with the new URL
+   *   - point origin at the new URL (init the repo if it doesn't exist yet)
+   *   - run one vault sync — handles the empty-remote first-push case
+   */
+  async connectMainRepo(url: string, branch: string): Promise<void> {
+    const cleanUrl = url.trim();
+    const cleanBranch = (branch.trim() || "main");
+    if (!cleanUrl) throw new Error("Repository URL is required.");
+
+    this.settings.mainRepoUrl = cleanUrl;
+    this.settings.mainRepoBranch = cleanBranch;
+    this.settings.setupComplete = true;
+    await this.saveSettings();
+    this.reinitGit();
+
+    await this.gitManager.setOrigin(cleanUrl, cleanBranch);
+    await this.scheduler.runVault("chore: initial vault sync");
+  }
+
   async removeSubmodule(id: string): Promise<void> {
     const sub = this.settings.submodules.find((s) => s.id === id);
     if (!sub) return;
