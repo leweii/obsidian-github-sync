@@ -16,10 +16,7 @@ function loadNodeModule<T>(name: string): T {
       "Smart Vault Sync is desktop-only; Node built-ins are unavailable on this platform.",
     );
   }
-  // obsidianmd/no-nodejs-modules requires Node access to go through a
-  // Platform.isDesktop-guarded require(); that directly conflicts with
-  // @typescript-eslint/no-require-imports. The Obsidian rule wins.
-  // eslint-disable-next-line @typescript-eslint/no-require-imports
+  // eslint-disable-next-line @typescript-eslint/no-require-imports -- obsidianmd/no-nodejs-modules mandates a Platform.isDesktop-guarded require() for Node access; that directly conflicts with no-require-imports. The Obsidian rule wins.
   return require(name) as T;
 }
 
