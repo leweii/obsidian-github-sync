@@ -113,12 +113,22 @@ export class SetupWizard extends Modal {
     hero.createEl("h2", { text: "Your Credentials" });
     hero.createEl("p", { text: "Stored locally — never committed to any repo." });
 
-    // Token field with show/hide toggle
+    // Token field with show/hide toggle + help link
     const tokenWrap = contentEl.createDiv("ghs-wizard-field");
-    tokenWrap.createEl("label", { text: "GitHub Personal Access Token" });
+    const labelRow = tokenWrap.createDiv("ghs-wizard-label-row");
+    labelRow.createEl("label", { text: "GitHub Personal Access Token" });
+    const helpBtn = labelRow.createEl("button", {
+      cls: "ghs-help-btn",
+      attr: { type: "button", "aria-label": "Where do I get a token?" },
+    });
+    setIcon(helpBtn, "help-circle");
+    helpBtn.onclick = (e) => {
+      e.preventDefault();
+      window.open("https://github.com/settings/personal-access-tokens", "_blank");
+    };
     const tokenRow = tokenWrap.createDiv("ghs-wizard-token-row");
     const tokenInput = tokenRow.createEl("input", {
-      attr: { type: "password", placeholder: "ghp_xxxxxxxxxxxx" },
+      attr: { type: "password", placeholder: "ghp_… or github_pat_…" },
     });
     tokenInput.value = this.state.githubToken;
     const eyeBtn = tokenRow.createEl("button", { cls: "ghs-eye-btn" });
@@ -129,7 +139,16 @@ export class SetupWizard extends Modal {
     const hint = tokenWrap.createDiv("ghs-hint");
     hint.appendText("Needs ");
     hint.createEl("code", { text: "repo" });
-    hint.appendText(" scope.");
+    hint.appendText(" scope. Don't have one? Click the ");
+    const inlineHelp = hint.createEl("a", {
+      text: "? icon above",
+      attr: { href: "https://github.com/settings/personal-access-tokens" },
+    });
+    inlineHelp.onclick = (e) => {
+      e.preventDefault();
+      window.open("https://github.com/settings/personal-access-tokens", "_blank");
+    };
+    hint.appendText(" to create one.");
 
     const badge = contentEl.createDiv("ghs-wizard-badge-row");
     if (this.tokenStatus !== "idle") this.renderTokenBadge(badge);

@@ -309,6 +309,11 @@ export class GitHubSyncSettingTab extends PluginSettingTab {
     new Setting(parent)
       .setName(t.tokenLabel)
       .addExtraButton((b) =>
+        b.setIcon("help-circle").setTooltip(t.tokenHelp).onClick(() => {
+          window.open("https://github.com/settings/personal-access-tokens", "_blank");
+        })
+      )
+      .addExtraButton((b) =>
         b.setIcon("eye").setTooltip(t.tokenShowHide).onClick(() => {
           if (!tokenInputEl) return;
           tokenInputEl.type = tokenInputEl.type === "password" ? "text" : "password";

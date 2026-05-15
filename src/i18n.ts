@@ -53,8 +53,9 @@ const en = {
     sectionGitHubDesc:   "Personal Access Token with 'repo' scope.",
     tokenLabel:          "Personal access token",
     tokenDesc:           "Stored locally — never committed to the repo.",
-    tokenPlaceholder:    "ghp_…",
+    tokenPlaceholder:    "ghp_… or github_pat_…",
     tokenShowHide:       "Show/hide",
+    tokenHelp:           "Where do I get a token?",
 
     testConnectionLabel: "Test connection",
     testConnectionDesc:  "Verify the token can reach GitHub.",
@@ -313,8 +314,9 @@ const zh: typeof en = {
     sectionGitHubDesc:   "需要 'repo' 权限的个人访问令牌。",
     tokenLabel:          "个人访问令牌",
     tokenDesc:           "仅存储在本地，不会提交到仓库。",
-    tokenPlaceholder:    "ghp_…",
+    tokenPlaceholder:    "ghp_… 或 github_pat_…",
     tokenShowHide:       "显示/隐藏",
+    tokenHelp:           "去哪里申请令牌？",
 
     testConnectionLabel: "测试连接",
     testConnectionDesc:  "验证令牌能否访问 GitHub。",
