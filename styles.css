@@ -1685,13 +1685,15 @@
 
 /* Strip Obsidian 1.12 default card chrome and all dividers from setting rows.
  * Rely on whitespace + section headers for visual grouping, not lines. */
-.ghs-settings .setting-item {
-  background: transparent !important;
-  border: none !important;
-  border-radius: 0 !important;
-  padding: 10px 2px !important;
-  margin: 0 !important;
-  box-shadow: none !important;
+/* Doubled class raises specificity to (0,3,0) so it wins over
+ * Obsidian 1.12's default card chrome without needing the important flag. */
+.ghs-settings.ghs-settings .setting-item {
+  background: transparent;
+  border: none;
+  border-radius: 0;
+  padding: 10px 2px;
+  margin: 0;
+  box-shadow: none;
   /* Keep label column + control column on one row, baseline-aligned */
   align-items: center;
 }
@@ -1874,8 +1876,8 @@
   padding: 4px 14px 12px;
   background: var(--background-primary);
 }
-.ghs-advanced-body .setting-item {
-  border-top: none !important;
+.ghs-advanced-body.ghs-advanced-body .setting-item {
+  border-top: none;
 }
 
 /* Test-connection badge — sits below the Test button as its own row */
@@ -2264,10 +2266,11 @@
   border-top: 1px solid var(--background-modifier-border);
 }
 
-.ghs-lc-revert-btn {
-  background: var(--color-red) !important;
-  color: white !important;
-  border: none !important;
+/* Doubled class wins over Obsidian/theme button rules via specificity instead of the important flag. */
+.ghs-lc-revert-btn.ghs-lc-revert-btn {
+  background: var(--color-red);
+  color: white;
+  border: none;
   padding: 6px 16px;
   border-radius: 4px;
   font-weight: 600;
@@ -2283,9 +2286,11 @@
   cursor: default;
 }
 
-/* Utility: toggle visibility via class instead of inline style */
-.ghs-hidden {
-  display: none !important;
+/* Utility: toggle visibility via class. Doubled class gives (0,2,0)
+ * specificity so it beats any single-class display rule (inline-flex
+ * badges, flex diag container) via specificity instead of the important flag. */
+.ghs-hidden.ghs-hidden {
+  display: none;
 }
 
 /* Test-connection diagnostic container — vertical list of result rows */
