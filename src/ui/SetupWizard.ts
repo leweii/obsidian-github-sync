@@ -1,7 +1,7 @@
 import { App, Modal, Notice, requestUrl, setIcon } from "obsidian";
 import type GitHubSyncPlugin from "../main";
 import { isValidGitHubUrl } from "../git/SubmoduleManager";
-import { ensureRemoteHasCommits } from "../git/githubApi";
+import { ensureRemoteHasCommits, type GitHubUser } from "../git/githubApi";
 
 interface WizardState {
   githubToken: string;
@@ -237,15 +237,16 @@ export class SetupWizard extends Modal {
         throw: false,
       });
       if (res.status === 200) {
-        this.tokenUser = res.json.login;
+        const user = res.json as GitHubUser;
+        this.tokenUser = user.login;
         this.tokenStatus = "success";
-        if (!nameInput.value && res.json.name) {
-          nameInput.value = res.json.name;
-          this.state.gitUser = res.json.name;
+        if (!nameInput.value && user.name) {
+          nameInput.value = user.name;
+          this.state.gitUser = user.name;
         }
-        if (!emailInput.value && res.json.email) {
-          emailInput.value = res.json.email;
-          this.state.gitEmail = res.json.email;
+        if (!emailInput.value && user.email) {
+          emailInput.value = user.email;
+          this.state.gitEmail = user.email;
         }
       } else {
         this.tokenStatus = "error";
@@ -333,7 +334,7 @@ export class SetupWizard extends Modal {
           ignorePatterns: this.plugin.settings.ignorePatterns,
         });
         this.goTo(3);
-      } catch (e: any) {
+      } catch (e: unknown) {
         finishBtn.disabled = false;
         finishBtn.textContent = "Finish";
         const { GitConflictError } = await import("../git/GitManager");
@@ -343,7 +344,8 @@ export class SetupWizard extends Modal {
           const ops = this.plugin.getRepoOps("__vault__");
           if (ops) new ConflictModal(this.app, ops, e.conflicts, () => {}, "Main Vault").open();
         } else {
-          new Notice(`Connection failed: ${e.message ?? e}`);
+          const msg = e instanceof Error ? e.message : String(e);
+          new Notice(`Connection failed: ${msg}`);
         }
       }
     });

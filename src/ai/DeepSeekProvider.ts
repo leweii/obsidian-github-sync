@@ -2,6 +2,13 @@ import { requestUrl } from "obsidian";
 import type { AIProvider, AISuggestion, AISuggestionRequest } from "./AIProvider";
 import { SYSTEM_PROMPT, buildPrompt, parseAIResponse } from "./prompt";
 
+// OpenAI-compatible chat-completion response shape. Only the fields we
+// actually read are declared; real responses contain many more.
+interface DeepSeekChatResponse {
+  choices?: Array<{ message?: { content?: string } }>;
+  usage?: { prompt_tokens?: number; completion_tokens?: number };
+}
+
 // DeepSeek pricing per token (USD). Falls back to deepseek-chat rate
 // if the configured model isn't listed. Source: deepseek.com docs, 2026.
 const PRICING: Record<string, { in: number; out: number }> = {
@@ -64,7 +71,7 @@ export class DeepSeekProvider implements AIProvider {
       throw new Error(`DeepSeek HTTP ${res.status} — ${truncate(res.text, 200)}`);
     }
 
-    const body = res.json;
+    const body = res.json as DeepSeekChatResponse | null;
     const content = body?.choices?.[0]?.message?.content ?? "";
     if (!content) throw new Error("DeepSeek returned empty response");
 

@@ -1,6 +1,6 @@
 import { ItemView, Modal, Notice, WorkspaceLeaf, setIcon } from "obsidian";
 import type GitHubSyncPlugin from "../main";
-import type { SyncHistoryEntry, SyncPhase, SyncProgress } from "../types";
+import type { PendingChanges, SyncHistoryEntry, SyncPhase, SyncProgress } from "../types";
 import { VAULT_REPO_ID } from "../types";
 import { AddSubmoduleModal } from "./AddSubmoduleModal";
 import { ConflictModal } from "./ConflictModal";
@@ -159,7 +159,14 @@ export class SyncDashboard extends ItemView {
       setIcon(emptyIcon, "git-branch");
       this.emptyEl.createEl("p", { text: "No repositories configured yet." });
       const openSettings = this.emptyEl.createEl("button", { text: "Open Settings", cls: "mod-cta" });
-      openSettings.onclick = () => (this.app as any).setting?.open?.();
+      openSettings.onclick = () => {
+        // app.setting is an undocumented runtime property exposed by
+        // Obsidian (used by many community plugins to open the Settings
+        // pane). Cast to a narrow shape rather than `any` so accidental
+        // misuse elsewhere still type-errors.
+        const appWithSetting = this.app as unknown as { setting?: { open?: () => void } };
+        appWithSetting.setting?.open?.();
+      };
     }
 
     // History
@@ -355,7 +362,7 @@ export class SyncDashboard extends ItemView {
     const card = this.cards.get(id);
     if (!card) return;
     try {
-      let changes;
+      let changes: PendingChanges;
       if (id === VAULT_REPO_ID) {
         changes = await this.plugin.gitManager.listChanges(
           this.plugin.settings.ignorePatterns

@@ -1,4 +1,4 @@
-import { Plugin, Notice } from "obsidian";
+import { Plugin, Notice, FileSystemAdapter } from "obsidian";
 import { GitHubSyncSettings, DEFAULT_SETTINGS, GitHubSyncSettingTab } from "./settings";
 import { setLang } from "./i18n";
 import { GitManager } from "./git/GitManager";
@@ -47,11 +47,25 @@ export default class GitHubSyncPlugin extends Plugin {
     return leaf?.view instanceof SyncDashboard ? leaf.view : null;
   }
 
+  /**
+   * Absolute path to the vault on disk. Plugin is desktop-only
+   * (`isDesktopOnly: true`), so the adapter is always a FileSystemAdapter
+   * — the explicit instanceof check satisfies the type checker and gives
+   * a clearer error than a blind cast if the invariant is ever broken.
+   */
+  private getVaultPath(): string {
+    const adapter = this.app.vault.adapter;
+    if (!(adapter instanceof FileSystemAdapter)) {
+      throw new Error("Smart Vault Sync requires a FileSystemAdapter (desktop only).");
+    }
+    return adapter.getBasePath();
+  }
+
   async onload() {
     await this.loadSettings();
     setLang(this.settings.language ?? "en");
 
-    const vaultPath = (this.app.vault.adapter as any).basePath as string;
+    const vaultPath = this.getVaultPath();
 
     // If user already had settings in data.json but no .github-sync.json
     // yet, generate one — runs once, then a no-op forever after.
@@ -301,7 +315,7 @@ export default class GitHubSyncPlugin extends Plugin {
   }
 
   reinitGit(): void {
-    const vaultPath = (this.app.vault.adapter as any).basePath as string;
+    const vaultPath = this.getVaultPath();
     this.initGit(vaultPath);
     this.scheduler = new SyncScheduler(
       this.gitManager,
@@ -449,9 +463,11 @@ export default class GitHubSyncPlugin extends Plugin {
   }
 
   async loadSettings() {
-    // Local layer: secrets + machine state (data.json)
-    const local = await this.loadData();
-    let merged: GitHubSyncSettings = Object.assign({}, DEFAULT_SETTINGS, local);
+    // Local layer: secrets + machine state (data.json). loadData()
+    // returns `unknown` (Obsidian doesn't know our shape); merge with
+    // defaults to fill in any missing fields, then trust the union.
+    const local = (await this.loadData()) as Partial<GitHubSyncSettings> | null;
+    let merged: GitHubSyncSettings = Object.assign({}, DEFAULT_SETTINGS, local ?? {});
 
     // Repo layer: structural config (.github-sync.json) overlays local
     try {

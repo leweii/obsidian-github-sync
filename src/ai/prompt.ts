@@ -80,27 +80,37 @@ export function parseAIResponse(content: string): {
     cleaned = cleaned.slice(firstBrace, lastBrace + 1);
   }
 
-  let obj: any;
+  let parsed: unknown;
   try {
-    obj = JSON.parse(cleaned);
+    parsed = JSON.parse(cleaned);
   } catch (e) {
     throw new Error(`AI response was not valid JSON: ${(e as Error).message}`);
   }
 
-  const merged = Array.isArray(obj.merged)
-    ? obj.merged.map(String)
-    : String(obj.merged ?? "").split("\n");
+  // Narrow once: anything missing is treated as the default. We never
+  // trust the LLM to return well-typed fields — coerce + clamp at the
+  // boundary, then downstream code sees a fully-typed AIResponse.
+  const obj = (parsed && typeof parsed === "object" ? parsed : {}) as Record<string, unknown>;
 
-  const reasoning = Array.isArray(obj.reasoning)
-    ? obj.reasoning.map(String)
-    : obj.reasoning
-    ? [String(obj.reasoning)]
+  const rawMerged = obj.merged;
+  const merged: string[] = Array.isArray(rawMerged)
+    ? rawMerged.map((s): string => String(s))
+    : String(rawMerged ?? "").split("\n");
+
+  const rawReasoning = obj.reasoning;
+  const reasoning: string[] = Array.isArray(rawReasoning)
+    ? rawReasoning.map((s): string => String(s))
+    : rawReasoning != null
+    ? [String(rawReasoning)]
     : [];
 
   const confidence = clamp(Number(obj.confidence) || 0, 0, 5);
 
-  const picks = Array.isArray(obj.picks)
-    ? obj.picks.map((n: unknown) => Number(n)).filter((n: number) => Number.isInteger(n) && n >= 0 && n < merged.length)
+  const rawPicks = obj.picks;
+  const picks: number[] = Array.isArray(rawPicks)
+    ? rawPicks
+        .map((n): number => Number(n))
+        .filter((n): boolean => Number.isInteger(n) && n >= 0 && n < merged.length)
     : [];
 
   return { merged, reasoning, confidence, picks };

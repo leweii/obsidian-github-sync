@@ -2,6 +2,12 @@ import { requestUrl } from "obsidian";
 import type { AIProvider, AISuggestion, AISuggestionRequest } from "./AIProvider";
 import { SYSTEM_PROMPT, buildPrompt, parseAIResponse } from "./prompt";
 
+// Gemini generateContent response shape — only the fields we read.
+interface GeminiResponse {
+  candidates?: Array<{ content?: { parts?: Array<{ text?: string }> } }>;
+  usageMetadata?: { promptTokenCount?: number; candidatesTokenCount?: number };
+}
+
 // Gemini free-tier pricing — 0 for flash on free tier. Paid pricing
 // per the docs (USD per token, 2026). Conservative fallback to flash rate.
 const PRICING: Record<string, { in: number; out: number }> = {
@@ -66,7 +72,7 @@ export class GeminiProvider implements AIProvider {
       throw new Error(`Gemini HTTP ${res.status} — ${truncate(res.text, 200)}`);
     }
 
-    const body = res.json;
+    const body = res.json as GeminiResponse | null;
     const content = body?.candidates?.[0]?.content?.parts?.[0]?.text ?? "";
     if (!content) throw new Error("Gemini returned empty response");
 

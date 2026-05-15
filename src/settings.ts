@@ -3,7 +3,7 @@ import type GitHubSyncPlugin from "./main";
 import type { SyncHistoryEntry } from "./types";
 import { L, setLang, tf, type Lang } from "./i18n";
 import { isValidGitHubUrl } from "./git/SubmoduleManager";
-import { checkRepoAccess } from "./git/githubApi";
+import { checkRepoAccess, type GitHubUser } from "./git/githubApi";
 import { AIProviderSetupModal } from "./ui/AIProviderSetupModal";
 
 export interface SubmoduleConfig {
@@ -475,7 +475,7 @@ export class GitHubSyncSettingTab extends PluginSettingTab {
         throw: false,
       });
       if (res.status === 200) {
-        login = res.json.login;
+        login = (res.json as GitHubUser).login;
         this.setDiagRow(tokenRow, tf(t.testConnected, login), "success");
       } else {
         this.setDiagRow(tokenRow, tf(t.testReturned, res.status), "error");

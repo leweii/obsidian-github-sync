@@ -64,7 +64,7 @@ function makeRemoteWithCommit(fileName = "README.md", content = "# README"): str
 }
 
 function makeGM(vaultPath: string): GitManager {
-  return new GitManager(vaultPath, "Test", "test@test.com", "");
+  return new GitManager(vaultPath, "Test", "test@test.com", "", ".obsidian");
 }
 
 function findResiduals(dir: string): string[] {

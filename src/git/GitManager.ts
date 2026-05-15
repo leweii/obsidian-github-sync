@@ -32,7 +32,7 @@ export class GitManager {
     user: string,
     email: string,
     token: string,
-    configDir = ".obsidian"
+    configDir: string
   ) {
     this.vaultPath = vaultPath;
     this.user = user;

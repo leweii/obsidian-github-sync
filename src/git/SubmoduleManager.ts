@@ -14,7 +14,7 @@ export class SubmoduleManager {
     private user: string,
     private email: string,
     private token: string,
-    private configDir = ".obsidian"
+    private configDir: string
   ) {
     this.git = simpleGit(vaultPath);
   }

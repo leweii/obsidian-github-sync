@@ -24,7 +24,7 @@ export async function readRepoConfig(
     const exists = await adapter.exists(filePath);
     if (!exists) return null;
     const text = await adapter.read(filePath);
-    const raw = JSON.parse(text);
+    const raw: unknown = JSON.parse(text);
     return parseRepoConfig(raw);
   } catch (e) {
     console.warn(`[github-sync] couldn't read ${filePath}:`, e);

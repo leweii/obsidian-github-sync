@@ -22,6 +22,28 @@ export interface RepoAccessCheck {
   reason?: string;
 }
 
+// Minimal shape of the GitHub API responses we read. We only declare the
+// fields actually accessed by the plugin — the real responses contain
+// many more keys.
+export interface GitHubUser {
+  login: string;
+  name?: string | null;
+  email?: string | null;
+}
+
+interface GitHubRepo {
+  full_name: string;
+  permissions?: { push?: boolean };
+}
+
+interface GitHubErrorBody {
+  message?: string;
+}
+
+function isString(v: unknown): v is string {
+  return typeof v === "string";
+}
+
 /**
  * Probe a GitHub repo URL for access and write permission. Returns a
  * structured result the caller can render in a diagnostic UI; never
@@ -50,16 +72,17 @@ export async function checkRepoAccess(
     throw: false,
   });
   if (res.status !== 200) {
-    const apiMsg = res.json?.message;
+    const apiMsg = (res.json as GitHubErrorBody | null | undefined)?.message;
     const reason =
       res.status === 404 ? "Repository not found (or no read access)"
       : res.status === 401 ? "Token rejected"
-      : res.status === 403 ? (apiMsg?.includes("SAML") ? "SSO not authorized for this token" : "Access forbidden")
+      : res.status === 403 ? (isString(apiMsg) && apiMsg.includes("SAML") ? "SSO not authorized for this token" : "Access forbidden")
       : `GitHub returned ${res.status}`;
     return { ok: false, status: res.status, reason };
   }
-  const fullName = res.json?.full_name ?? `${owner}/${repo}`;
-  const canPush = !!res.json?.permissions?.push;
+  const repoBody = res.json as GitHubRepo | null;
+  const fullName = repoBody?.full_name ?? `${owner}/${repo}`;
+  const canPush = !!repoBody?.permissions?.push;
   // Cheap follow-up: check for empty repo (only matters for diagnostic
   // completeness — auto-init already handles it).
   const commits = await requestUrl({
