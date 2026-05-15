@@ -154,11 +154,8 @@ export default class GitHubSyncPlugin extends Plugin {
       void this.checkExistingConflicts();
     });
 
-    if (!this.settings.githubToken) {
-      this.app.workspace.onLayoutReady(() => {
-        new SetupWizard(this.app, this).open();
-      });
-    }
+    // Setup wizard no longer auto-pops on plugin load — that's nagging.
+    // Users open it from Settings → Smart Vault Sync → "Run setup wizard".
 
     // On startup:
     //   1. Auto-init submodules declared in .github-sync.json but not yet

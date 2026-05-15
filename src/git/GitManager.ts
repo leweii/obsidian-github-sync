@@ -67,6 +67,12 @@ export class GitManager {
     await this.git.addConfig("http.lowSpeedLimit", "1000").catch(() => {});
     await this.git.addConfig("http.lowSpeedTime", "600").catch(() => {});
     await this.git.addConfig("http.version", "HTTP/1.1").catch(() => {});
+    // Suppress git's "The following paths are ignored by one of your
+    // .gitignore files / hint: Use -f if you really want to add them"
+    // advice. The plugin already filters ignored paths and surfaces its
+    // own messages — the raw hint is just noise that confuses non-technical
+    // users who never invoked git directly.
+    await this.git.addConfig("advice.addIgnoredFile", "false").catch(() => {});
   }
 
   /**
@@ -155,6 +161,40 @@ export class GitManager {
     } catch {
       return false;
     }
+  }
+
+  /** Resolve the real .git directory, handling submodule gitfile indirection. */
+  private resolveGitDir(): string | null {
+    try {
+      const gitFileOrDir = `${this.vaultPath}/.git`;
+      const stat = fs.statSync(gitFileOrDir);
+      if (stat.isDirectory()) return gitFileOrDir;
+      const ref = fs.readFileSync(gitFileOrDir, "utf8").trim().replace(/^gitdir:\s*/, "");
+      return path.resolve(this.vaultPath, ref);
+    } catch {
+      return null;
+    }
+  }
+
+  /**
+   * Remove a stale `.git/index.lock` left behind by a previous git
+   * process that crashed (Obsidian quit mid-sync, machine slept, etc.).
+   * Only deletes lock files older than 30s — within that window a real
+   * concurrent op might be running.
+   *
+   * Called at the start of every sync to recover from the common
+   * "Another git process seems to be running" failure that otherwise
+   * required the user to delete the file by hand.
+   */
+  private clearStaleIndexLock(): void {
+    const gitDir = this.resolveGitDir();
+    if (!gitDir) return;
+    const lockPath = path.join(gitDir, "index.lock");
+    try {
+      const stat = fs.statSync(lockPath);
+      const ageMs = Date.now() - stat.mtimeMs;
+      if (ageMs > 30_000) fs.unlinkSync(lockPath);
+    } catch { /* lock doesn't exist — nothing to do */ }
   }
 
   async listConflicts(): Promise<string[]> {
@@ -398,6 +438,8 @@ export class GitManager {
   }
 
   async initRepo(remoteUrl: string, branch: string): Promise<void> {
+    // If a previous run crashed mid-init, a stale lock can block this one.
+    this.clearStaleIndexLock();
     await this.git.init();
     await this.configureGit();
     await this.git.raw(["checkout", "-b", branch]).catch(() => {});
@@ -423,6 +465,7 @@ export class GitManager {
 
   async sync(opts: SyncOptions & { remoteUrl?: string } = {}): Promise<number> {
     const branch = opts.branch ?? "main";
+    this.clearStaleIndexLock();
     opts.onProgress?.({ phase: "checking", message: "Checking status" });
 
     // Auto-init if this vault isn't a git repo yet.

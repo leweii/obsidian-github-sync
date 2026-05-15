@@ -5,6 +5,7 @@ import { L, setLang, tf, type Lang } from "./i18n";
 import { isValidGitHubUrl } from "./git/SubmoduleManager";
 import { checkRepoAccess, type GitHubUser } from "./git/githubApi";
 import { AIProviderSetupModal } from "./ui/AIProviderSetupModal";
+import { SetupWizard } from "./ui/SetupWizard";
 
 export interface SubmoduleConfig {
   id: string;
@@ -190,6 +191,18 @@ export class GitHubSyncSettingTab extends PluginSettingTab {
   private renderRepository(parent: HTMLElement): void {
     const t = L().settings;
     this.sectionHeader(parent, t.sectionRepo);
+
+    // Prominent wizard launcher. The wizard used to auto-pop on every
+    // load; now it's strictly opt-in and lives here so users who want
+    // it can always find it.
+    new Setting(parent)
+      .setName(t.runSetupWizard)
+      .setDesc(t.runSetupWizardDesc)
+      .addButton((b) =>
+        b.setButtonText(t.runSetupWizard).setCta().onClick(() => {
+          new SetupWizard(this.app, this.plugin).open();
+        })
+      );
 
     const s = this.plugin.settings;
     let urlInputEl: HTMLInputElement | null = null;

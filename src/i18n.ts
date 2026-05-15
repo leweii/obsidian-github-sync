@@ -97,6 +97,8 @@ const en = {
 
     sectionRepo:         "Connected repository",
     sectionRepoDesc:     "Managed via .github-sync.json — edit by running the wizard.",
+    runSetupWizard:      "Run setup wizard",
+    runSetupWizardDesc:  "Step-by-step: token, identity, first repo connection.",
     noRepo:              "No repository connected yet.",
     connectRepo:         "Connect repository…",
     mainVaultLabel:      "Main vault",
@@ -358,6 +360,8 @@ const zh: typeof en = {
 
     sectionRepo:         "已连接仓库",
     sectionRepoDesc:     "通过 .github-sync.json 管理，运行向导可修改。",
+    runSetupWizard:      "运行设置向导",
+    runSetupWizardDesc:  "逐步引导：令牌、身份、首次仓库连接。",
     noRepo:              "暂未连接仓库。",
     connectRepo:         "连接仓库…",
     mainVaultLabel:      "主 Vault",
