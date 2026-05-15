@@ -1,3 +1,4 @@
+/* eslint-disable obsidianmd/no-nodejs-modules -- test harness runs in Node, not shipped in main.js */
 /**
  * Integration tests for GitManager — real git repos in temp directories.
  */

@@ -20,7 +20,7 @@ export class StatusBar {
     this.iconEl = this.el.createSpan({ cls: "ghs-sb-icon" });
     this.textEl = this.el.createSpan({ cls: "ghs-sb-text" });
     this.badgeEl = this.el.createSpan({ cls: "ghs-sb-badge" });
-    this.badgeEl.style.display = "none";
+    this.badgeEl.addClass("ghs-hidden");
     this.render();
 
     // Refresh "Xm ago" label every 30s.
@@ -99,11 +99,11 @@ export class StatusBar {
     this.textEl.setText(text);
 
     if (this.pendingChanges > 0 && (this.phase === "idle" || this.phase === "synced")) {
-      this.badgeEl.style.display = "";
+      this.badgeEl.removeClass("ghs-hidden");
       this.badgeEl.setText(`${this.pendingChanges}`);
       this.badgeEl.title = `${this.pendingChanges} pending change(s)`;
     } else {
-      this.badgeEl.style.display = "none";
+      this.badgeEl.addClass("ghs-hidden");
     }
   }
 }

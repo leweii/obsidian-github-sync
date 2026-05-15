@@ -35,8 +35,17 @@ export default class GitHubSyncPlugin extends Plugin {
   submoduleManager: SubmoduleManager;
   scheduler: SyncScheduler;
   private statusBar: StatusBar;
-  private dashboard: SyncDashboard | null = null;
   private pendingPollHandle: ReturnType<typeof setInterval> | null = null;
+
+  /**
+   * Resolve the live dashboard view from the workspace rather than holding
+   * a reference on the plugin. Storing the view instance on the plugin
+   * leaks it across leaf detach/reattach (Obsidian guideline).
+   */
+  private get dashboard(): SyncDashboard | null {
+    const leaf = this.app.workspace.getLeavesOfType(DASHBOARD_VIEW_TYPE)[0];
+    return leaf?.view instanceof SyncDashboard ? leaf.view : null;
+  }
 
   async onload() {
     await this.loadSettings();
@@ -83,10 +92,7 @@ export default class GitHubSyncPlugin extends Plugin {
 
     this.scheduler.setAutoResolver((repoId, conflicts) => this.attemptAutoResolve(repoId, conflicts));
 
-    this.registerView(DASHBOARD_VIEW_TYPE, (leaf) => {
-      this.dashboard = new SyncDashboard(leaf, this);
-      return this.dashboard;
-    });
+    this.registerView(DASHBOARD_VIEW_TYPE, (leaf) => new SyncDashboard(leaf, this));
 
     this.addRibbonIcon("github", "GitHub Sync", () => this.activateDashboard());
 
@@ -440,7 +446,6 @@ export default class GitHubSyncPlugin extends Plugin {
     this.scheduler.stop();
     if (this.pendingPollHandle) clearInterval(this.pendingPollHandle);
     this.statusBar?.destroy();
-    this.app.workspace.detachLeavesOfType(DASHBOARD_VIEW_TYPE);
   }
 
   async loadSettings() {

@@ -36,7 +36,7 @@ export class AddSubmoduleModal extends Modal {
     pathHint.setText("Folder relative to vault root (e.g. Projects/work)");
     const pathInput = pathWrap.createEl("input", { attr: { placeholder: "Projects/work" } });
     const pathBadge = pathWrap.createDiv("ghs-inline-badge");
-    pathBadge.style.display = "none";
+    pathBadge.addClass("ghs-hidden");
     pathInput.oninput = () => {
       this.localPath = normalizeRepoPath(pathInput.value.trim());
       this.checkPath(pathBadge);
@@ -50,7 +50,7 @@ export class AddSubmoduleModal extends Modal {
       attr: { placeholder: "https://github.com/user/repo.git" },
     });
     const urlBadge = urlWrap.createDiv("ghs-inline-badge");
-    urlBadge.style.display = "none";
+    urlBadge.addClass("ghs-hidden");
     urlInput.oninput = () => {
       this.remoteUrl = urlInput.value.trim();
       if (this.remoteDebounce) clearTimeout(this.remoteDebounce);
@@ -92,10 +92,10 @@ export class AddSubmoduleModal extends Modal {
   private renderRemoteBadge(el: HTMLElement): void {
     el.empty();
     if (this.remoteStatus === "idle") {
-      el.style.display = "none";
+      el.addClass("ghs-hidden");
       return;
     }
-    el.style.display = "";
+    el.removeClass("ghs-hidden");
     el.removeClass("valid", "invalid", "loading");
     el.addClass(this.remoteStatus);
     const iconWrap = el.createSpan();
@@ -161,14 +161,14 @@ export class AddSubmoduleModal extends Modal {
   private checkPath(badge: HTMLElement): void {
     badge.empty();
     if (!this.localPath) {
-      badge.style.display = "none";
+      badge.addClass("ghs-hidden");
       this.pathStatus = "idle";
       return;
     }
     const taken = this.plugin.settings.submodules.some((s) => s.localPath === this.localPath);
     if (taken) {
       this.pathStatus = "collision";
-      badge.style.display = "";
+      badge.removeClass("ghs-hidden");
       badge.removeClass("valid");
       badge.addClass("invalid");
       const iconWrap = badge.createSpan();
@@ -176,7 +176,7 @@ export class AddSubmoduleModal extends Modal {
       badge.createSpan({ text: "A submodule already exists at this path" });
     } else {
       this.pathStatus = "ok";
-      badge.style.display = "";
+      badge.removeClass("ghs-hidden");
       badge.removeClass("invalid");
       badge.addClass("valid");
       const iconWrap = badge.createSpan();

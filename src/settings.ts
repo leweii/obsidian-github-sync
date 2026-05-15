@@ -194,7 +194,7 @@ export class GitHubSyncSettingTab extends PluginSettingTab {
     let urlInputEl: HTMLInputElement | null = null;
     let branchInputEl: HTMLInputElement | null = null;
     const statusEl = createDiv("ghs-inline-badge ghs-repo-status");
-    statusEl.style.display = "none";
+    statusEl.addClass("ghs-hidden");
 
     const isValidUrl = (u: string) => isValidGitHubUrl(u.trim());
 
@@ -209,7 +209,7 @@ export class GitHubSyncSettingTab extends PluginSettingTab {
           .onChange((v) => {
             this.plugin.settings.mainRepoUrl = v.trim();
           });
-        tx.inputEl.style.minWidth = "320px";
+        tx.inputEl.addClass("ghs-token-input");
       });
 
     // Editable branch field.
@@ -272,9 +272,10 @@ export class GitHubSyncSettingTab extends PluginSettingTab {
 
     // Submodules list (read-only — managed in the dashboard).
     if (s.submodules.length > 0) {
-      const subHeader = parent.createDiv("ghs-subsection-header");
-      subHeader.createEl("h4", { text: t.repoSubmodules });
-      subHeader.createSpan({ cls: "ghs-subsection-meta", text: `${s.submodules.length}` });
+      new Setting(parent)
+        .setName(t.repoSubmodules)
+        .setDesc(`${s.submodules.length}`)
+        .setHeading();
       for (const sub of s.submodules) {
         new Setting(parent)
           .setName(sub.localPath)
@@ -286,7 +287,7 @@ export class GitHubSyncSettingTab extends PluginSettingTab {
 
   private showRepoStatus(badge: HTMLElement, kind: "loading" | "valid" | "invalid", text: string): void {
     badge.empty();
-    badge.style.display = "";
+    badge.removeClass("ghs-hidden");
     badge.removeClass("loading", "valid", "invalid");
     badge.addClass(kind);
     setIcon(
@@ -304,7 +305,7 @@ export class GitHubSyncSettingTab extends PluginSettingTab {
 
     let tokenInputEl: HTMLInputElement | null = null;
     const testBadge = createDiv("ghs-inline-badge ghs-test-badge");
-    testBadge.style.display = "none";
+    testBadge.addClass("ghs-hidden");
 
     new Setting(parent)
       .setName(t.tokenLabel)
@@ -447,19 +448,15 @@ export class GitHubSyncSettingTab extends PluginSettingTab {
   // ── Helpers ──────────────────────────────────────────────────
 
   private sectionHeader(parent: HTMLElement, title: string, desc?: string): void {
-    const wrap = parent.createDiv("ghs-section-header");
-    const titleRow = wrap.createDiv("ghs-section-title-row");
-    titleRow.createEl("h3", { text: title, cls: "setting-item-heading" });
-    if (desc) wrap.createEl("p", { text: desc, cls: "ghs-section-desc" });
+    const setting = new Setting(parent).setName(title).setHeading();
+    if (desc) setting.setDesc(desc);
   }
 
   private async testConnection(container: HTMLElement): Promise<void> {
     const t = L().settings;
     container.empty();
-    container.style.display = "flex";
-    container.style.flexDirection = "column";
-    container.style.alignItems = "flex-start";
-    container.style.gap = "4px";
+    container.removeClass("ghs-hidden");
+    container.addClass("ghs-diag-container");
 
     const token = this.plugin.settings.githubToken;
     if (!token) {

@@ -1,6 +1,5 @@
 import simpleGit, { SimpleGit } from "simple-git";
-import * as fs from "fs";
-import * as path from "path";
+import { fs, path, type Dirent } from "../node-builtins";
 import type { PendingChanges, SyncProgress } from "../types";
 
 export type ProgressFn = (p: SyncProgress) => void;
@@ -324,7 +323,7 @@ export class GitManager {
     const toRemove: string[] = [];
 
     const scan = (dir: string) => {
-      let entries: fs.Dirent[];
+      let entries: Dirent[];
       try { entries = fs.readdirSync(dir, { withFileTypes: true }); } catch { return; }
       for (const entry of entries) {
         const full = `${dir}/${entry.name}`;

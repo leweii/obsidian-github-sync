@@ -216,7 +216,7 @@ export class SyncDashboard extends ItemView {
     const meta = card.createDiv("ghs-repo-card-meta");
 
     const errorRow = card.createDiv("ghs-repo-card-error");
-    errorRow.style.display = "none";
+    errorRow.addClass("ghs-hidden");
     const errorIcon = errorRow.createSpan({ cls: "ghs-error-icon" });
     setIcon(errorIcon, "alert-circle");
     const errorText = errorRow.createSpan({ cls: "ghs-error-text" });
@@ -274,13 +274,13 @@ export class SyncDashboard extends ItemView {
 
     // Error row
     const hasError = state.phase === "error" || state.phase === "conflict";
-    errorRow.style.display = hasError ? "" : "none";
+    errorRow.toggleClass("ghs-hidden", !hasError);
     errorRow.removeClass("conflict", "error");
     if (hasError) {
       errorRow.addClass(state.phase);
       errorText.setText(friendlyError(state.errorMsg ?? ""));
       const resolveBtn = errorRow.querySelector(".ghs-resolve-btn") as HTMLButtonElement;
-      if (resolveBtn) resolveBtn.style.display = state.phase === "conflict" ? "" : "none";
+      if (resolveBtn) resolveBtn.toggleClass("ghs-hidden", state.phase !== "conflict");
     }
   }
 

@@ -57,7 +57,7 @@ export class AIProviderSetupModal extends Modal {
     });
 
     this.errorEl = contentEl.createDiv("ghs-ai-setup-error");
-    this.errorEl.style.display = "none";
+    this.errorEl.addClass("ghs-hidden");
 
     const footer = contentEl.createDiv("ghs-ai-setup-footer");
     const skip = footer.createEl("button", {
@@ -117,14 +117,14 @@ export class AIProviderSetupModal extends Modal {
     if (!this.saveBtn) return;
     const hasOne = this.deepseek.length > 0 || this.gemini.length > 0;
     this.saveBtn.disabled = !hasOne;
-    if (this.errorEl) this.errorEl.style.display = "none";
+    if (this.errorEl) this.errorEl.addClass("ghs-hidden");
   }
 
   private async save(): Promise<void> {
     const t = L().settings;
     if (!this.deepseek && !this.gemini) {
       if (this.errorEl) {
-        this.errorEl.style.display = "";
+        this.errorEl.removeClass("ghs-hidden");
         this.errorEl.setText(t.aiSetupNoKey);
       }
       return;

@@ -1,5 +1,5 @@
 import simpleGit, { SimpleGit } from "simple-git";
-import * as fs from "fs";
+import { fs } from "../node-builtins";
 import type { SubmoduleConfig } from "../settings";
 import type { PendingChanges, SyncProgress } from "../types";
 import { GitManager, GitConflictError } from "./GitManager";

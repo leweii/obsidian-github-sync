@@ -1,8 +1,8 @@
 {
   "id": "smart-vault-sync",
   "name": "Smart Vault Sync",
-  "version": "0.1.20",
-  "minAppVersion": "1.0.0",
+  "version": "0.1.21",
+  "minAppVersion": "1.7.2",
   "description": "Smart two-way sync for your vault and submodules with GitHub, powered by AI commit messages.",
   "author": "Jakob",
   "authorUrl": "https://github.com/leweii",
