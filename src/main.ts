@@ -3,6 +3,7 @@ import { GitHubSyncSettings, DEFAULT_SETTINGS, GitHubSyncSettingTab } from "./se
 import { setLang } from "./i18n";
 import { GitManager } from "./git/GitManager";
 import { SubmoduleManager } from "./git/SubmoduleManager";
+import { ensureRemoteHasCommits } from "./git/githubApi";
 import { SyncScheduler } from "./sync/SyncScheduler";
 import { StatusBar } from "./ui/StatusBar";
 import { SetupWizard } from "./ui/SetupWizard";
@@ -200,6 +201,14 @@ export default class GitHubSyncPlugin extends Plugin {
     this.settings.setupComplete = true;
     await this.saveSettings();
     this.reinitGit();
+
+    // If the remote is a brand-new empty GitHub repo, push a README via
+    // the Contents API first. Without this, the user's chosen branch
+    // might not exist on the remote when the local push tries to
+    // --set-upstream — and even when it works, the regular (non-initial)
+    // sync path's pull would fail on "couldn't find remote ref" until
+    // the first push lands.
+    await ensureRemoteHasCommits(cleanUrl, this.settings.githubToken);
 
     await this.gitManager.setOrigin(cleanUrl, cleanBranch);
     await this.scheduler.runVault("chore: initial vault sync");

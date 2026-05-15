@@ -1,6 +1,7 @@
 import type { GitManager } from "../git/GitManager";
 import { GitConflictError } from "../git/GitManager";
 import type { SubmoduleManager } from "../git/SubmoduleManager";
+import { ensureRemoteHasCommits } from "../git/githubApi";
 import type { GitHubSyncSettings } from "../settings";
 import type { SyncProgress } from "../types";
 import { VAULT_REPO_ID } from "../types";
@@ -110,6 +111,12 @@ export class SyncScheduler {
 
     this.emit(VAULT_REPO_ID, { phase: "checking" });
     try {
+      // Defensive: if the remote is still an uninitialised GitHub repo,
+      // seed it via the Contents API so the upcoming pull/push has a
+      // default branch to talk to. No-op for non-empty remotes; cost is
+      // a single cheap API request.
+      await ensureRemoteHasCommits(settings.mainRepoUrl, settings.githubToken);
+
       const count = await this.gitManager.sync({
         branch,
         message,
@@ -148,6 +155,11 @@ export class SyncScheduler {
     if (!sub) return;
     this.emit(id, { phase: "checking" });
     try {
+      // Same defensive auto-init as runVault — covers the case where the
+      // user added a submodule via an older plugin version (no auto-init),
+      // or recreated the remote on github.com between runs.
+      await ensureRemoteHasCommits(sub.remoteUrl, this.getSettings().githubToken);
+
       const count = await this.submoduleManager.syncOne(sub, (p) => this.emit(id, p));
       this.emit(id, { phase: "synced" });
       this.emitComplete(id, { ok: true, count });

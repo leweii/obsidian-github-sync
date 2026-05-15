@@ -1,6 +1,7 @@
 import { App, Modal, Notice, requestUrl, setIcon } from "obsidian";
 import type GitHubSyncPlugin from "../main";
 import { isValidGitHubUrl } from "../git/SubmoduleManager";
+import { ensureRemoteHasCommits } from "../git/githubApi";
 
 interface WizardState {
   githubToken: string;
@@ -293,6 +294,13 @@ export class SetupWizard extends Modal {
       finishBtn.textContent = "Connecting…";
 
       try {
+        // If the user just created an empty GitHub repo via the web UI,
+        // seed it with a README via the API so git has a default branch
+        // to push --set-upstream against. Silent no-op otherwise.
+        finishBtn.textContent = "Preparing repository…";
+        await ensureRemoteHasCommits(url, this.plugin.settings.githubToken);
+        finishBtn.textContent = "Connecting…";
+
         // Update origin BEFORE sync. Without this, switching to a new repo
         // URL would still push/pull against whatever origin .git/config
         // already had — e.g., the vault used to point at repo A, the user

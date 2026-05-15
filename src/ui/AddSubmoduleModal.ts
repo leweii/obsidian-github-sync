@@ -1,6 +1,7 @@
 import { App, Modal, Notice, requestUrl, setIcon } from "obsidian";
 import type GitHubSyncPlugin from "../main";
 import { isValidGitHubUrl, normalizeRepoPath } from "../git/SubmoduleManager";
+import { ensureRemoteHasCommits } from "../git/githubApi";
 
 export class AddSubmoduleModal extends Modal {
   private localPath = "";
@@ -211,7 +212,8 @@ export class AddSubmoduleModal extends Modal {
     try {
       if (this.remoteIsEmpty) {
         if (this.submitBtn) this.submitBtn.textContent = "Preparing repository…";
-        await this.initializeEmptyRepo();
+        await ensureRemoteHasCommits(this.remoteUrl, this.plugin.settings.githubToken);
+        this.remoteIsEmpty = false;
       }
       await this.plugin.addSubmodule(config);
       new Notice(`Added "${this.localPath}"`);
@@ -227,7 +229,7 @@ export class AddSubmoduleModal extends Modal {
       ) {
         try {
           if (this.submitBtn) this.submitBtn.textContent = "Preparing repository…";
-          await this.initializeEmptyRepo();
+          await ensureRemoteHasCommits(this.remoteUrl, this.plugin.settings.githubToken);
           await this.plugin.addSubmodule(config);
           new Notice(`Added "${this.localPath}"`);
           this.close();
@@ -243,43 +245,6 @@ export class AddSubmoduleModal extends Modal {
         this.submitBtn.textContent = "Add";
       }
     }
-  }
-
-  /**
-   * Create an initial commit on the remote so `git submodule add` has a
-   * branch to check out. Uses the GitHub Contents API to PUT a README on
-   * the chosen branch — the user's token already has repo scope (probe
-   * verified). Invisible to the user; just makes Add "work" for repos
-   * that were created on GitHub but never initialized.
-   */
-  private async initializeEmptyRepo(): Promise<void> {
-    const token = this.plugin.settings.githubToken;
-    if (!token) throw new Error("GitHub token required to initialize repository.");
-    const match = this.remoteUrl.match(/github\.com[:/]([\w.\-]+)\/([\w.\-]+?)(\.git)?\/?$/);
-    if (!match) throw new Error("Couldn't parse repository URL.");
-    const [, owner, repo] = match;
-    const content = btoa(`# ${repo}\n`);
-    const res = await requestUrl({
-      url: `https://api.github.com/repos/${owner}/${repo}/contents/README.md`,
-      method: "PUT",
-      headers: {
-        Authorization: `token ${token}`,
-        "User-Agent": "ObsidianGitHubSync",
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify({
-        message: "Initialize repository",
-        content,
-        // Omit `branch` — for an empty repo, GitHub creates the commit on
-        // the repo's configured default branch. Passing an explicit name
-        // can fail because the branch doesn't exist yet.
-      }),
-      throw: false,
-    });
-    if (res.status !== 201 && res.status !== 200) {
-      throw new Error(`Couldn't initialize repository (HTTP ${res.status}).`);
-    }
-    this.remoteIsEmpty = false;
   }
 
   onClose(): void {
