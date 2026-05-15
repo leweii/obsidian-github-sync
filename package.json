@@ -1,6 +1,6 @@
 {
   "name": "obsidian-github-sync",
-  "version": "0.1.5",
+  "version": "0.1.6",
   "description": "Sync Obsidian vault and submodules with GitHub",
   "main": "main.js",
   "scripts": {
