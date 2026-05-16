@@ -1,6 +1,6 @@
 {
   "name": "smart-vault-sync",
-  "version": "0.1.28",
+  "version": "0.1.29",
   "description": "Sync Obsidian vault and submodules with GitHub",
   "main": "main.js",
   "scripts": {
