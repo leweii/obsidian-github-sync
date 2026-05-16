@@ -46,6 +46,15 @@ export class GitManager {
   private async configureGit() {
     if (this.user) await this.git.addConfig("user.name", this.user).catch(() => {});
     if (this.email) await this.git.addConfig("user.email", this.email).catch(() => {});
+    // The credential-rewrite key embeds the token itself, so a rotated
+    // token becomes a *different* config key and the old rule lingers.
+    // Multiple insteadOf rules for the same https://github.com/ target
+    // are ambiguous: git may pick a stale/revoked token and fail real
+    // git ops with "Invalid username or token" even though the current
+    // token is valid (the API check, which reads the token directly,
+    // still passes — a confusing split-brain). Purge every prior rule
+    // so exactly one is ever active.
+    await this.clearCredentialRewrites();
     if (this.token) {
       await this.git.addConfig(
         "url.https://oauth2:" + this.token + "@github.com/.insteadOf",
@@ -73,6 +82,32 @@ export class GitManager {
     // own messages — the raw hint is just noise that confuses non-technical
     // users who never invoked git directly.
     await this.git.addConfig("advice.addIgnoredFile", "false").catch(() => {});
+  }
+
+  /**
+   * Remove every `url.<...>.insteadOf` rule from the local config. These
+   * are only ever written by configureGit() to inject the token into git's
+   * transport URL; stale ones (left by token rotation) make auth
+   * non-deterministic. Safe to call unconditionally before re-adding the
+   * current rule.
+   */
+  private async clearCredentialRewrites(): Promise<void> {
+    let listing: string;
+    try {
+      listing = await this.git.raw([
+        "config", "--local", "--name-only",
+        "--get-regexp", "^url\\..*\\.insteadof$",
+      ]);
+    } catch {
+      return; // git exits non-zero when there are no matching keys
+    }
+    const sections = new Set<string>();
+    for (const key of listing.split("\n").map((s) => s.trim()).filter(Boolean)) {
+      sections.add(key.replace(/\.insteadof$/i, ""));
+    }
+    for (const section of sections) {
+      await this.git.raw(["config", "--local", "--remove-section", section]).catch(() => {});
+    }
   }
 
   /**
