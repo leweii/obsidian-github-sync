@@ -1,5 +1,5 @@
 {
-  "name": "smart-vault-sync",
+  "name": "agentic-git-sync",
   "version": "0.1.29",
   "description": "Sync Obsidian vault and submodules with GitHub",
   "main": "main.js",

@@ -28,4 +28,6 @@ export interface AIProvider {
   name: string;
   isAvailable(): boolean;
   suggest(req: AISuggestionRequest): Promise<AISuggestion>;
+  /** Generic single-turn text completion — returns the raw response string. */
+  complete(system: string, user: string): Promise<string>;
 }

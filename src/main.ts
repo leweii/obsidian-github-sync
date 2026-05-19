@@ -56,7 +56,7 @@ export default class GitHubSyncPlugin extends Plugin {
   private getVaultPath(): string {
     const adapter = this.app.vault.adapter;
     if (!(adapter instanceof FileSystemAdapter)) {
-      throw new Error("Smart Vault Sync requires a FileSystemAdapter (desktop only).");
+      throw new Error("Agentic Git Sync requires a FileSystemAdapter (desktop only).");
     }
     return adapter.getBasePath();
   }
@@ -155,7 +155,7 @@ export default class GitHubSyncPlugin extends Plugin {
     });
 
     // Setup wizard no longer auto-pops on plugin load — that's nagging.
-    // Users open it from Settings → Smart Vault Sync → "Run setup wizard".
+    // Users open it from Settings → Agentic Git Sync → "Run setup wizard".
 
     // On startup:
     //   1. Auto-init submodules declared in .github-sync.json but not yet
@@ -295,12 +295,14 @@ export default class GitHubSyncPlugin extends Plugin {
 
   private initGit(vaultPath: string): void {
     const configDir = this.app.vault.configDir;
+    const providers = this.buildAIProviders();
     this.gitManager = new GitManager(
       vaultPath,
       this.settings.gitUser,
       this.settings.gitEmail,
       this.settings.githubToken,
-      configDir
+      configDir,
+      providers
     );
     this.submoduleManager = new SubmoduleManager(
       vaultPath,
@@ -309,6 +311,18 @@ export default class GitHubSyncPlugin extends Plugin {
       this.settings.githubToken,
       configDir
     );
+  }
+
+  private buildAIProviders(): AIProvider[] {
+    const ai = this.settings.ai;
+    const providers: AIProvider[] = [];
+    if (ai.deepseekToken) {
+      providers.push(new DeepSeekProvider({ token: ai.deepseekToken, model: ai.deepseekModel }));
+    }
+    if (ai.geminiToken) {
+      providers.push(new GeminiProvider({ token: ai.geminiToken, model: ai.geminiModel }));
+    }
+    return providers;
   }
 
   reinitGit(): void {

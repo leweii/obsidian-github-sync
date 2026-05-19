@@ -1,6 +1,8 @@
 import simpleGit, { SimpleGit } from "simple-git";
 import { fs, path, type Dirent } from "../node-builtins";
 import type { PendingChanges, SyncProgress } from "../types";
+import type { AIProvider } from "../ai/AIProvider";
+import { GitErrorAgent } from "./GitErrorAgent";
 
 export type ProgressFn = (p: SyncProgress) => void;
 
@@ -26,13 +28,15 @@ export class GitManager {
   private email: string;
   private token: string;
   private configDir: string;
+  private errorAgent: GitErrorAgent;
 
   constructor(
     vaultPath: string,
     user: string,
     email: string,
     token: string,
-    configDir: string
+    configDir: string,
+    providers: AIProvider[] = []
   ) {
     this.vaultPath = vaultPath;
     this.user = user;
@@ -40,6 +44,7 @@ export class GitManager {
     this.token = token;
     this.configDir = configDir;
     this.git = simpleGit(vaultPath);
+    this.errorAgent = new GitErrorAgent(this.git, vaultPath, providers);
     this.configureGit().catch(() => {});
   }
 
@@ -498,7 +503,31 @@ export class GitManager {
     }
   }
 
+  /**
+   * Sync with automatic error recovery. Up to MAX_RECOVERY_ATTEMPTS recovery
+   * cycles are attempted before the error is surfaced. GitConflictError (user
+   * content merge conflicts) is never intercepted here — it always surfaces
+   * to the ConflictModal for the user to resolve.
+   */
   async sync(opts: SyncOptions & { remoteUrl?: string } = {}): Promise<number> {
+    const branch = opts.branch ?? "main";
+    const MAX_RECOVERY_ATTEMPTS = 2;
+
+    for (let attempt = 0; attempt <= MAX_RECOVERY_ATTEMPTS; attempt++) {
+      try {
+        return await this._doSync(opts);
+      } catch (e) {
+        if (e instanceof GitConflictError) throw e;
+        if (attempt >= MAX_RECOVERY_ATTEMPTS) throw e;
+        const recovered = await this.errorAgent.tryRecover(e as Error, "sync", branch);
+        if (!recovered) throw e;
+        // recovered — loop and retry _doSync with a clean state
+      }
+    }
+    throw new Error("Sync failed after all recovery attempts");
+  }
+
+  private async _doSync(opts: SyncOptions & { remoteUrl?: string }): Promise<number> {
     const branch = opts.branch ?? "main";
     this.clearStaleIndexLock();
     opts.onProgress?.({ phase: "checking", message: "Checking status" });

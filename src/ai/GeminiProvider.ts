@@ -89,6 +89,34 @@ export class GeminiProvider implements AIProvider {
       costUsd: inputTokens * price.in + outputTokens * price.out,
     };
   }
+
+  async complete(system: string, user: string): Promise<string> {
+    const url = `https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(
+      this.model
+    )}:generateContent?key=${encodeURIComponent(this.cfg.token)}`;
+
+    const res = await requestUrl({
+      url,
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        contents: [{ role: "user", parts: [{ text: `${system}\n\n${user}` }] }],
+        generationConfig: {
+          maxOutputTokens: 512,
+          temperature: 0.1,
+          responseMimeType: "application/json",
+        },
+      }),
+      throw: false,
+    });
+
+    if (res.status !== 200) {
+      throw new Error(`Gemini HTTP ${res.status} — ${truncate(res.text, 200)}`);
+    }
+
+    const body = res.json as GeminiResponse | null;
+    return body?.candidates?.[0]?.content?.parts?.[0]?.text ?? "";
+  }
 }
 
 function truncate(s: string | undefined, n: number): string {

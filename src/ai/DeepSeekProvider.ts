@@ -88,6 +88,35 @@ export class DeepSeekProvider implements AIProvider {
       costUsd: inputTokens * price.in + outputTokens * price.out,
     };
   }
+
+  async complete(system: string, user: string): Promise<string> {
+    const res = await requestUrl({
+      url: `${this.baseUrl}/v1/chat/completions`,
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${this.cfg.token}`,
+      },
+      body: JSON.stringify({
+        model: this.model,
+        max_tokens: 512,
+        temperature: 0.1,
+        messages: [
+          { role: "system", content: system },
+          { role: "user", content: user },
+        ],
+        response_format: { type: "json_object" },
+      }),
+      throw: false,
+    });
+
+    if (res.status !== 200) {
+      throw new Error(`DeepSeek HTTP ${res.status} — ${truncate(res.text, 200)}`);
+    }
+
+    const body = res.json as DeepSeekChatResponse | null;
+    return body?.choices?.[0]?.message?.content ?? "";
+  }
 }
 
 function truncate(s: string | undefined, n: number): string {
