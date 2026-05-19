@@ -1,6 +1,6 @@
 {
   "name": "agentic-git-sync",
-  "version": "0.1.29",
+  "version": "0.1.30",
   "description": "Sync Obsidian vault and submodules with GitHub",
   "main": "main.js",
   "scripts": {
